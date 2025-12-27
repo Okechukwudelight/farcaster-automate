@@ -14,7 +14,128 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      action_logs: {
+        Row: {
+          action_type: string
+          agent_id: string
+          cast_author: string
+          cast_hash: string
+          cast_text: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          agent_id: string
+          cast_author: string
+          cast_hash: string
+          cast_text?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          agent_id?: string
+          cast_author?: string
+          cast_hash?: string
+          cast_text?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_logs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "agents"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      agents: {
+        Row: {
+          accounts: string[] | null
+          action_type: string
+          created_at: string
+          id: string
+          is_active: boolean
+          keywords: string[] | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accounts?: string[] | null
+          action_type?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          name?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accounts?: string[] | null
+          action_type?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          keywords?: string[] | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_connections: {
+        Row: {
+          created_at: string
+          farcaster_display_name: string | null
+          farcaster_fid: number | null
+          farcaster_pfp_url: string | null
+          farcaster_signer_uuid: string | null
+          farcaster_username: string | null
+          id: string
+          updated_at: string
+          user_id: string
+          wallet_address: string | null
+        }
+        Insert: {
+          created_at?: string
+          farcaster_display_name?: string | null
+          farcaster_fid?: number | null
+          farcaster_pfp_url?: string | null
+          farcaster_signer_uuid?: string | null
+          farcaster_username?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+          wallet_address?: string | null
+        }
+        Update: {
+          created_at?: string
+          farcaster_display_name?: string | null
+          farcaster_fid?: number | null
+          farcaster_pfp_url?: string | null
+          farcaster_signer_uuid?: string | null
+          farcaster_username?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+          wallet_address?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
