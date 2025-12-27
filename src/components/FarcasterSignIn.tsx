@@ -577,20 +577,6 @@ Your new password: ${farcasterPassword}`;
                       </span>
                     </div>
                   </div>
-
-                  <div className="flex flex-col items-center gap-2 w-full">
-                    <a href={url} className="text-sm text-purple-400 hover:text-purple-300 underline">
-                      Open in Warpcast app
-                    </a>
-                    <Button
-                      onClick={handleManualCheck}
-                      variant="outline"
-                      size="sm"
-                      className="mt-2 text-xs"
-                    >
-                      {isPolling ? 'Check Status' : 'I\'ve Confirmed - Check Now'}
-                    </Button>
-                  </div>
                 </>
               )}
             </>
