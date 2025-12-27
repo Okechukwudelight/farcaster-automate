@@ -12,6 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { z } from 'zod';
 import { FarcasterSignIn } from '@/components/FarcasterSignIn';
+import { getInjectedProvider, personalSign, requestWalletAddress, type WalletProviderType } from '@/lib/walletAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const authSchema = z.object({
   email: z.string().email('Please enter a valid email address'),
@@ -26,6 +28,7 @@ export default function Auth() {
 
   const [isSignUp, setIsSignUp] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [walletAuthLoading, setWalletAuthLoading] = useState<WalletProviderType | null>(null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
@@ -84,48 +87,75 @@ export default function Auth() {
     setIsLoading(false);
   };
 
-  const handleWalletConnect = async (type: 'metamask' | 'coinbase') => {
+  const handleWalletAuth = async (type: WalletProviderType) => {
     const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
-    
-    // Check if wallet extension exists
-    if (!window.ethereum) {
+    const provider = getInjectedProvider(type);
+
+    if (!provider) {
       toast({
         title: `${walletName} Not Found`,
-        description: `Please install ${walletName} extension to continue`,
+        description: `Please install ${walletName} to continue`,
         variant: 'destructive',
       });
       window.open(
-        type === 'coinbase' 
-          ? 'https://www.coinbase.com/wallet' 
-          : 'https://metamask.io/download/',
+        type === 'coinbase' ? 'https://www.coinbase.com/wallet' : 'https://metamask.io/download/',
         '_blank'
       );
       return;
     }
 
+    setWalletAuthLoading(type);
+
     try {
+      // Keep existing connect behavior (updates wallet UI state)
       await wallet.connect(type);
-      
-      // Check for error in wallet state
-      if (wallet.error) {
-        toast({
-          title: 'Connection Failed',
-          description: wallet.error,
-          variant: 'destructive',
-        });
-        return;
+
+      const address = await requestWalletAddress(provider);
+      const message = `Sign in to FarAgent\n\nWallet: ${address}\nDomain: ${window.location.host}`;
+      const signature = await personalSign(provider, address, message);
+
+      // Deterministic credentials from signature (proves ownership)
+      const walletEmail = `wallet_${address.toLowerCase()}@faragent.local`;
+      const walletPassword = `w_${signature.slice(2, 42)}_${address.slice(2, 6)}`;
+
+      const { error: signInError } = await signIn(walletEmail, walletPassword);
+
+      if (signInError) {
+        const { error: signUpError } = await signUp(walletEmail, walletPassword);
+
+        if (signUpError && !signUpError.message.includes('already registered')) {
+          throw signUpError;
+        }
+
+        if (signUpError?.message.includes('already registered')) {
+          const { error: retryError } = await signIn(walletEmail, walletPassword);
+          if (retryError) throw retryError;
+        }
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        await supabase
+          .from('user_connections')
+          .upsert({ user_id: authUser.id, wallet_address: address }, { onConflict: 'user_id' });
       }
 
       toast({
-        title: 'Wallet Connected',
-        description: `${walletName} connected successfully`,
+        title: 'Wallet verified',
+        description: `Signed in with ${walletName}`,
       });
+
+      navigate('/');
     } catch (error: any) {
       toast({
-        title: 'Connection Failed',
-        description: error.message || 'Failed to connect wallet',
+        title: 'Wallet sign-in failed',
+        description: error?.message || 'Could not sign in with wallet',
         variant: 'destructive',
       });
+    } finally {
+      setWalletAuthLoading(null);
     }
   };
 
@@ -189,8 +219,8 @@ export default function Auth() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => handleWalletConnect('metamask')}
-                disabled={wallet.isConnecting}
+                onClick={() => handleWalletAuth('metamask')}
+                disabled={!!walletAuthLoading}
                 className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-orange-500/30 transition-all duration-300 group"
               >
                 <div className="flex items-center gap-3">
@@ -203,10 +233,10 @@ export default function Auth() {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-foreground">Continue with MetaMask</p>
-                    <p className="text-xs text-muted-foreground">Connect your MetaMask wallet</p>
+                    <p className="text-xs text-muted-foreground">Sign a message to verify ownership</p>
                   </div>
                 </div>
-                {wallet.isConnecting ? (
+                {walletAuthLoading === 'metamask' ? (
                   <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
                 ) : (
                   <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-orange-500 group-hover:translate-x-1 transition-all" />
@@ -215,8 +245,8 @@ export default function Auth() {
 
               <button
                 type="button"
-                onClick={() => handleWalletConnect('coinbase')}
-                disabled={wallet.isConnecting}
+                onClick={() => handleWalletAuth('coinbase')}
+                disabled={!!walletAuthLoading}
                 className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-blue-500/30 transition-all duration-300 group"
               >
                 <div className="flex items-center gap-3">
@@ -228,10 +258,10 @@ export default function Auth() {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-foreground">Continue with Coinbase</p>
-                    <p className="text-xs text-muted-foreground">Connect Coinbase Wallet</p>
+                    <p className="text-xs text-muted-foreground">Sign a message to verify ownership</p>
                   </div>
                 </div>
-                {wallet.isConnecting ? (
+                {walletAuthLoading === 'coinbase' ? (
                   <Loader2 className="h-5 w-5 text-muted-foreground animate-spin" />
                 ) : (
                   <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-blue-500 group-hover:translate-x-1 transition-all" />
