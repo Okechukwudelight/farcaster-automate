@@ -88,18 +88,41 @@ export default function Auth() {
   };
 
   const handleWalletConnect = async (type: 'metamask' | 'coinbase') => {
+    const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
+    
+    // Check if wallet extension exists
+    if (!window.ethereum) {
+      toast({
+        title: `${walletName} Not Found`,
+        description: `Please install ${walletName} extension to continue`,
+        variant: 'destructive',
+      });
+      window.open(
+        type === 'coinbase' 
+          ? 'https://www.coinbase.com/wallet' 
+          : 'https://metamask.io/download/',
+        '_blank'
+      );
+      return;
+    }
+
     try {
       await wallet.connect(type);
       
-      // Check wallet state after connection attempt
-      setTimeout(() => {
-        if (wallet.address) {
-          toast({
-            title: 'Wallet Connected',
-            description: `Connected: ${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`,
-          });
-        }
-      }, 500);
+      // Check for error in wallet state
+      if (wallet.error) {
+        toast({
+          title: 'Connection Failed',
+          description: wallet.error,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      toast({
+        title: 'Wallet Connected',
+        description: `${walletName} connected successfully`,
+      });
     } catch (error: any) {
       toast({
         title: 'Connection Failed',
@@ -126,30 +149,46 @@ export default function Auth() {
     setIsLookingUpFarcaster(true);
 
     try {
-      // Create a signer for the user
-      const { data: signerData, error: signerError } = await supabase.functions.invoke('farcaster-signer', {
-        body: { action: 'create' },
+      // Lookup user by username (free API)
+      const username = farcasterUsername.replace('@', '').trim();
+      
+      const response = await fetch(`https://api.neynar.com/v2/farcaster/user/by_username?username=${username}`, {
+        headers: {
+          'api_key': 'NEYNAR_API_DOCS', // Public demo key for user lookup
+        },
       });
 
-      if (signerError) throw signerError;
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'User not found');
+      }
+
+      const userData = await response.json();
+      const user = userData.user;
+
+      if (!user) {
+        throw new Error('Farcaster user not found');
+      }
 
       toast({
-        title: 'Farcaster Connected',
-        description: `Signer created. Now sign in or create an account to complete setup.`,
+        title: 'Farcaster User Found',
+        description: `Found @${user.username}. Sign in or create an account to complete setup.`,
       });
 
-      // Store the signer info temporarily
-      sessionStorage.setItem('pendingFarcasterSigner', JSON.stringify({
-        signerUuid: signerData.signer_uuid,
-        username: farcasterUsername.replace('@', ''),
+      // Store the user info temporarily
+      sessionStorage.setItem('pendingFarcasterUser', JSON.stringify({
+        fid: user.fid,
+        username: user.username,
+        displayName: user.display_name,
+        pfpUrl: user.pfp_url,
       }));
 
       setShowFarcasterDialog(false);
     } catch (error: any) {
       console.error('Farcaster lookup error:', error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to connect Farcaster',
+        title: 'User Not Found',
+        description: error.message || 'Could not find that Farcaster user',
         variant: 'destructive',
       });
     }
@@ -157,7 +196,7 @@ export default function Auth() {
     setIsLookingUpFarcaster(false);
   };
 
-  const pendingFarcaster = sessionStorage.getItem('pendingFarcasterSigner');
+  const pendingFarcaster = sessionStorage.getItem('pendingFarcasterUser');
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
