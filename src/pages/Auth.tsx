@@ -164,39 +164,77 @@ export default function Auth() {
       }
 
       const userData = await response.json();
-      const user = userData.user;
+      const fcUser = userData.user;
 
-      if (!user) {
+      if (!fcUser) {
         throw new Error('Farcaster user not found');
       }
 
       toast({
         title: 'Farcaster User Found',
-        description: `Found @${user.username}. Sign in or create an account to complete setup.`,
+        description: `Found @${fcUser.username}. Signing you in...`,
       });
 
-      // Store the user info temporarily
-      sessionStorage.setItem('pendingFarcasterUser', JSON.stringify({
-        fid: user.fid,
-        username: user.username,
-        displayName: user.display_name,
-        pfpUrl: user.pfp_url,
-      }));
+      // Generate a deterministic email and password from fid
+      const farcasterEmail = `farcaster_${fcUser.fid}@faragent.local`;
+      const farcasterPassword = `fc_${fcUser.fid}_${fcUser.username}_secure_pwd`;
+
+      // Try to sign in first (existing user)
+      const { error: signInError } = await signIn(farcasterEmail, farcasterPassword);
+
+      if (signInError) {
+        // If sign in fails, create new account
+        const { error: signUpError } = await signUp(farcasterEmail, farcasterPassword);
+        
+        if (signUpError && !signUpError.message.includes('already registered')) {
+          throw signUpError;
+        }
+
+        // If already registered, try signing in again
+        if (signUpError?.message.includes('already registered')) {
+          const { error: retryError } = await signIn(farcasterEmail, farcasterPassword);
+          if (retryError) throw retryError;
+        }
+      }
+
+      // Wait for auth state to update
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      // Get current user and save Farcaster connection
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      
+      if (authUser) {
+        await supabase
+          .from('user_connections')
+          .upsert({
+            user_id: authUser.id,
+            farcaster_fid: fcUser.fid,
+            farcaster_username: fcUser.username,
+            farcaster_display_name: fcUser.display_name,
+            farcaster_pfp_url: fcUser.pfp_url,
+          }, { onConflict: 'user_id' });
+      }
 
       setShowFarcasterDialog(false);
-    } catch (error: any) {
-      console.error('Farcaster lookup error:', error);
+      sessionStorage.removeItem('pendingFarcasterUser');
+
       toast({
-        title: 'User Not Found',
-        description: error.message || 'Could not find that Farcaster user',
+        title: 'Welcome!',
+        description: `Signed in as @${fcUser.username}`,
+      });
+
+      navigate('/');
+    } catch (error: any) {
+      console.error('Farcaster login error:', error);
+      toast({
+        title: 'Login Failed',
+        description: error.message || 'Could not sign in with Farcaster',
         variant: 'destructive',
       });
     }
 
     setIsLookingUpFarcaster(false);
   };
-
-  const pendingFarcaster = sessionStorage.getItem('pendingFarcasterUser');
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
@@ -319,16 +357,10 @@ export default function Auth() {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-foreground">Continue with Farcaster</p>
-                    <p className="text-xs text-muted-foreground">
-                      {pendingFarcaster ? 'Signer ready - complete signup below' : 'Sign in with your Farcaster account'}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Sign in with your Farcaster account</p>
                   </div>
                 </div>
-                {pendingFarcaster ? (
-                  <div className="w-2 h-2 rounded-full bg-green-500" />
-                ) : (
-                  <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
-                )}
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
               </button>
             </div>
 
