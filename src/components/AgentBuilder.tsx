@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Play, Loader2, Settings, RefreshCw, Heart, X, Search } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Play, Loader2, Settings, RefreshCw, Heart, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -65,11 +65,7 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
   const [keywordInput, setKeywordInput] = useState('');
   const [accountInput, setAccountInput] = useState('');
   
-  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [isSearchingUsernames, setIsSearchingUsernames] = useState(false);
-  const accountInputRef = useRef<HTMLInputElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  // Autocomplete state removed - requires paid Neynar plan
 
   const [formData, setFormData] = useState({
     name: 'My Agent',
@@ -107,84 +103,9 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
     loadAgent();
   }, [user]);
 
-  // Search Farcaster usernames
-  useEffect(() => {
-    const searchUsernames = async () => {
-      if (accountInput.length < 2) {
-        setUsernameSuggestions([]);
-        setShowSuggestions(false);
-        return;
-      }
+  // Username autocomplete disabled - requires paid Neynar plan
+  // Users can type usernames manually and add them with Enter or Add button
 
-      if (!user) {
-        // User must be authenticated to search
-        return;
-      }
-
-      setIsSearchingUsernames(true);
-      try {
-        // Call edge function to search usernames
-        // Note: This requires the edge function to be deployed to Supabase
-        const { data, error } = await supabase.functions.invoke('farcaster-actions', {
-          body: {
-            action: 'search_usernames',
-            query: accountInput.replace('@', '').trim(),
-          },
-        });
-
-        if (error) {
-          // If 401 or 404, the edge function might not be deployed
-          // Silently fail - users can still type usernames manually
-          if (error.status === 401 || error.status === 404) {
-            console.log('Edge function not available - autocomplete disabled. Users can still type usernames manually.');
-          } else {
-            console.error('Error searching usernames:', error);
-          }
-          setUsernameSuggestions([]);
-          setShowSuggestions(false);
-          return;
-        }
-
-        if (data && typeof data === 'object' && 'usernames' in data && Array.isArray(data.usernames)) {
-          setUsernameSuggestions(data.usernames.slice(0, 5));
-          setShowSuggestions(true);
-        } else {
-          setUsernameSuggestions([]);
-          setShowSuggestions(false);
-        }
-      } catch (error: any) {
-        // Silently fail - don't show error to user for autocomplete
-        // Users can still type and add usernames manually
-        if (error?.status !== 401 && error?.status !== 404) {
-          console.error('Error searching usernames:', error);
-        }
-        setUsernameSuggestions([]);
-        setShowSuggestions(false);
-      } finally {
-        setIsSearchingUsernames(false);
-      }
-    };
-
-    const debounceTimer = setTimeout(searchUsernames, 500); // Increased debounce to reduce API calls
-    return () => clearTimeout(debounceTimer);
-  }, [accountInput, user]);
-
-  // Close suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        accountInputRef.current &&
-        !accountInputRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   const getActionType = (): 'like' | 'recast' | 'both' => {
     if (formData.enableLike && formData.enableRecast) return 'both';
@@ -210,7 +131,6 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
     if (trimmed && !accounts.includes(trimmed)) {
       setAccounts([...accounts, trimmed]);
       setAccountInput('');
-      setShowSuggestions(false);
     }
   };
 
@@ -539,35 +459,13 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Input
-                    ref={accountInputRef}
                     id="accounts"
                     value={accountInput}
                     onChange={(e) => setAccountInput(e.target.value)}
                     onKeyDown={handleAccountKeyPress}
-                    onFocus={() => accountInput.length >= 2 && setShowSuggestions(true)}
-                    placeholder="@username or type to search"
+                    placeholder="@username (type and press Enter)"
                     className="bg-secondary/50 flex-1"
                   />
-                  {isSearchingUsernames && (
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-pulse" />
-                  )}
-                  {showSuggestions && usernameSuggestions.length > 0 && (
-                    <div
-                      ref={suggestionsRef}
-                      className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
-                    >
-                      {usernameSuggestions.map((username) => (
-                        <button
-                          key={username}
-                          type="button"
-                          onClick={() => handleAddAccount(username)}
-                          className="w-full px-3 py-2 text-left hover:bg-secondary/50 transition-colors text-sm"
-                        >
-                          @{username}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 <Button
                   type="button"
