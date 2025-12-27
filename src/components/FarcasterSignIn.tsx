@@ -107,13 +107,22 @@ export function FarcasterSignIn({ open, onOpenChange }: FarcasterSignInProps) {
     }
   }, [signIn, signUp, toast, navigate, onOpenChange]);
 
-  const { signIn: startSignIn, url, isSuccess, isError, error, data } = useSignIn({
+  const { signIn: startSignIn, url, isSuccess, isError, error, data, isPolling } = useSignIn({
     onSuccess: handleSuccess,
+    onError: (err) => {
+      console.error('Farcaster AuthKit error:', err);
+      toast({
+        title: 'Farcaster Error',
+        description: err?.message || 'Failed to initialize sign-in',
+        variant: 'destructive',
+      });
+    },
   });
 
   useEffect(() => {
     if (open && !hasStarted) {
       setHasStarted(true);
+      console.log('Starting Farcaster sign-in...');
       startSignIn();
     }
 
@@ -121,6 +130,11 @@ export function FarcasterSignIn({ open, onOpenChange }: FarcasterSignInProps) {
       setHasStarted(false);
     }
   }, [open, hasStarted, startSignIn]);
+
+  // Debug: log state changes
+  useEffect(() => {
+    console.log('Farcaster state:', { url, isPolling, isSuccess, isError, error: error?.message });
+  }, [url, isPolling, isSuccess, isError, error]);
 
   const handleStartSignIn = useCallback(() => {
     setHasStarted(true);
@@ -225,6 +239,13 @@ export function FarcasterSignIn({ open, onOpenChange }: FarcasterSignInProps) {
               </Button>
             </div>
           )}
+
+          {/* Debug panel */}
+          <div className="w-full p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground space-y-1">
+            <p><span className="font-medium">Status:</span> {isPolling ? 'Polling' : isSuccess ? 'Success' : isError ? 'Error' : hasStarted ? 'Started' : 'Idle'}</p>
+            <p><span className="font-medium">URL:</span> {url ? 'Generated ✓' : 'Not yet'}</p>
+            {error && <p className="text-red-400"><span className="font-medium">Error:</span> {error.message}</p>}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
