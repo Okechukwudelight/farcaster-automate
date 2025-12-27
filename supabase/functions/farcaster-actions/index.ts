@@ -82,69 +82,26 @@ async function recast(signerUuid: string, castHash: string): Promise<{ success: 
 
 async function searchUsernames(query: string): Promise<{ usernames: string[] }> {
   try {
-    console.log('Searching usernames with query:', query);
+    console.log('Searching usernames for query:', query);
     
-    if (!query || query.length < 2) {
-      return { usernames: [] };
+    const response = await fetch(`${NEYNAR_BASE_URL}/farcaster/user/search?q=${encodeURIComponent(query)}&limit=10`, {
+      headers: {
+        'api_key': NEYNAR_API_KEY!,
+      },
+    });
+
+    const data = await response.json();
+    console.log('Username search response:', JSON.stringify(data));
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to search usernames');
     }
-    
-    const usernames: string[] = [];
-    const queryLower = query.toLowerCase().trim();
-    
-    // Try to get user by exact username match first
-    try {
-      const exactMatchResponse = await fetch(`${NEYNAR_BASE_URL}/farcaster/user/by_username?username=${encodeURIComponent(query)}`, {
-        headers: {
-          'api_key': NEYNAR_API_KEY!,
-        },
-      });
-      
-      if (exactMatchResponse.ok) {
-        const exactMatchData = await exactMatchResponse.json();
-        if (exactMatchData.result?.username) {
-          usernames.push(exactMatchData.result.username);
-        }
-      }
-    } catch (e) {
-      console.log('Exact match lookup failed (this is okay):', e);
-    }
-    
-    // Also search trending feed for partial matches
-    try {
-      const feedResponse = await fetch(`${NEYNAR_BASE_URL}/farcaster/feed/trending?limit=100&time_window=24h`, {
-        headers: {
-          'api_key': NEYNAR_API_KEY!,
-        },
-      });
-      
-      if (feedResponse.ok) {
-        const feedData = await feedResponse.json();
-        
-        // Extract unique usernames that match the query
-        const matchingUsernames = new Set<string>();
-        (feedData.casts || []).forEach((cast: any) => {
-          const username = cast.author?.username;
-          if (username && username.toLowerCase().includes(queryLower)) {
-            matchingUsernames.add(username);
-          }
-        });
-        
-        // Add matching usernames (excluding exact match if already added)
-        matchingUsernames.forEach(username => {
-          if (!usernames.includes(username)) {
-            usernames.push(username);
-          }
-        });
-      }
-    } catch (e) {
-      console.error('Error fetching feed for username search:', e);
-    }
-    
-    return { usernames: usernames.slice(0, 10) };
+
+    const usernames = (data.result?.users || []).map((user: any) => user.username);
+    return { usernames };
   } catch (error) {
     console.error('Error searching usernames:', error);
-    // Return empty array on error instead of throwing
-    return { usernames: [] };
+    throw error;
   }
 }
 
@@ -246,16 +203,9 @@ serve(async (req) => {
 
       case 'search_usernames':
         if (!body.query) {
-          result = { usernames: [] };
-        } else {
-          try {
-            result = await searchUsernames(body.query);
-          } catch (searchError) {
-            console.error('Error in search_usernames:', searchError);
-            // Return empty array instead of error to prevent 401
-            result = { usernames: [] };
-          }
+          throw new Error('query is required for search_usernames action');
         }
+        result = await searchUsernames(body.query);
         break;
 
       default:
