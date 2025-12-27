@@ -4,15 +4,60 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWallet } from '@/hooks/useWallet';
 import { useFarcaster } from '@/hooks/useFarcaster';
+import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
 
 export function ConnectionPanel() {
   const wallet = useWallet();
   const farcaster = useFarcaster();
+  const { user: authUser } = useAuth();
 
+  // Reload connections when auth user changes or component mounts
   useEffect(() => {
-    farcaster.loadConnection();
-  }, [farcaster.loadConnection]);
+    if (authUser) {
+      farcaster.loadConnection();
+      wallet.loadWallet();
+    }
+  }, [authUser, farcaster.loadConnection, wallet.loadWallet]);
+
+  // Also reload when window regains focus (in case user signed in in another tab/window)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (authUser) {
+        farcaster.loadConnection();
+        wallet.loadWallet();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [authUser, farcaster.loadConnection, wallet.loadWallet]);
+
+  // Listen for Farcaster connection events
+  useEffect(() => {
+    const handleFarcasterConnected = () => {
+      if (authUser) {
+        // Small delay to ensure database is ready
+        setTimeout(() => {
+          farcaster.loadConnection();
+        }, 500);
+      }
+    };
+    window.addEventListener('farcaster-connected', handleFarcasterConnected);
+    return () => window.removeEventListener('farcaster-connected', handleFarcasterConnected);
+  }, [authUser, farcaster.loadConnection]);
+
+  // Listen for wallet connection events
+  useEffect(() => {
+    const handleWalletConnected = () => {
+      if (authUser) {
+        setTimeout(() => {
+          wallet.loadWallet();
+        }, 500);
+      }
+    };
+    window.addEventListener('wallet-connected', handleWalletConnected);
+    return () => window.removeEventListener('wallet-connected', handleWalletConnected);
+  }, [authUser, wallet.loadWallet]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;

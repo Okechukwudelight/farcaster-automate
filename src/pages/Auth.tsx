@@ -1,24 +1,14 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, Loader2, Mail, Lock, ArrowRight, Sparkles } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+import { Loader2, ArrowRight } from 'lucide-react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
-import { z } from 'zod';
 import { FarcasterSignIn } from '@/components/FarcasterSignIn';
 import { getInjectedProvider, personalSign, requestWalletAddress, type WalletProviderType } from '@/lib/walletAuth';
 import { supabase } from '@/integrations/supabase/client';
-
-const authSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-});
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -26,12 +16,7 @@ export default function Auth() {
   const wallet = useWallet();
   const { toast } = useToast();
 
-  const [isSignUp, setIsSignUp] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
   const [walletAuthLoading, setWalletAuthLoading] = useState<WalletProviderType | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
   // Farcaster sign-in dialog state
   const [showFarcasterDialog, setShowFarcasterDialog] = useState(false);
@@ -41,51 +26,6 @@ export default function Auth() {
       navigate('/');
     }
   }, [user, navigate]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErrors({});
-
-    const result = authSchema.safeParse({ email, password });
-    if (!result.success) {
-      const fieldErrors: { email?: string; password?: string } = {};
-      result.error.errors.forEach((err) => {
-        if (err.path[0] === 'email') fieldErrors.email = err.message;
-        if (err.path[0] === 'password') fieldErrors.password = err.message;
-      });
-      setErrors(fieldErrors);
-      return;
-    }
-
-    setIsLoading(true);
-
-    const { error } = isSignUp
-      ? await signUp(email, password)
-      : await signIn(email, password);
-
-    if (error) {
-      let message = error.message;
-      if (message.includes('already registered')) {
-        message = 'This email is already registered. Please sign in instead.';
-      } else if (message.includes('Invalid login credentials')) {
-        message = 'Invalid email or password. Please try again.';
-      }
-
-      toast({
-        title: 'Error',
-        description: message,
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: isSignUp ? 'Account created' : 'Welcome back',
-        description: isSignUp ? 'Your account has been created successfully' : 'You have been signed in',
-      });
-      navigate('/');
-    }
-
-    setIsLoading(false);
-  };
 
   const handleWalletAuth = async (type: WalletProviderType) => {
     const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
@@ -114,32 +54,148 @@ export default function Auth() {
       const message = `Sign in to FarAgent\n\nWallet: ${address}\nDomain: ${window.location.host}`;
       const signature = await personalSign(provider, address, message);
 
-      // Deterministic credentials from signature (proves ownership)
-      const walletEmail = `wallet_${address.toLowerCase()}@faragent.local`;
-      const walletPassword = `w_${signature.slice(2, 42)}_${address.slice(2, 6)}`;
+      // Ensure signature has 0x prefix for password generation
+      const normalizedSignature = signature.startsWith('0x') ? signature : `0x${signature}`;
+      const normalizedAddress = address.startsWith('0x') ? address.toLowerCase() : `0x${address.toLowerCase()}`;
+      const addressWithoutPrefix = normalizedAddress.replace('0x', '').toLowerCase();
 
-      const { error: signInError } = await signIn(walletEmail, walletPassword);
+      // Check if this wallet is already linked to a Farcaster account
+      // Try multiple address formats since they might be stored differently
+      const { data: existingConnection } = await supabase
+        .from('user_connections')
+        .select('user_id, farcaster_fid, farcaster_username')
+        .or(`wallet_address.eq.${normalizedAddress},wallet_address.eq.${addressWithoutPrefix},wallet_address.eq.${address.toLowerCase()},wallet_address.eq.${address}`)
+        .maybeSingle();
 
-      if (signInError) {
-        const { error: signUpError } = await signUp(walletEmail, walletPassword);
+      let authUser = null;
 
-        if (signUpError && !signUpError.message.includes('already registered')) {
-          throw signUpError;
+      if (existingConnection?.user_id && existingConnection.farcaster_fid) {
+        // Wallet is already linked to a Farcaster account - sign in with Farcaster credentials
+        console.log('Wallet already linked to Farcaster account, signing in with Farcaster...', {
+          fid: existingConnection.farcaster_fid,
+          username: existingConnection.farcaster_username,
+        });
+        
+        const farcasterEmail = `farcaster_${existingConnection.farcaster_fid}@faragent.local`;
+        const farcasterPassword = `fc_${existingConnection.farcaster_fid}_${existingConnection.farcaster_username}`;
+        
+        // Try alternative password formats (same as FarcasterSignIn does)
+        const altPasswords = [
+          farcasterPassword, // Current: fc_fid_username
+          `fc_${existingConnection.farcaster_fid}_${existingConnection.farcaster_username}_stable_key`, // Old format
+        ];
+        
+        let signedInWithFarcaster = false;
+        for (const altPassword of altPasswords) {
+          const { error: altError } = await signIn(farcasterEmail, altPassword);
+          if (!altError) {
+            signedInWithFarcaster = true;
+            const { data: { user: userData } } = await supabase.auth.getUser();
+            authUser = userData;
+            
+            if (authUser) {
+              const { error: updateError } = await supabase
+                .from('user_connections')
+                .update({ wallet_address: normalizedAddress })
+                .eq('user_id', authUser.id);
+              
+              if (updateError) {
+                console.error('Error updating wallet address:', updateError);
+              } else {
+                console.log('Successfully signed in with Farcaster account and linked wallet');
+                // Trigger reload of connections
+                window.dispatchEvent(new CustomEvent('wallet-connected'));
+                window.dispatchEvent(new CustomEvent('farcaster-connected'));
+              }
+            }
+            break;
+          }
         }
-
-        if (signUpError?.message.includes('already registered')) {
-          const { error: retryError } = await signIn(walletEmail, walletPassword);
-          if (retryError) throw retryError;
+        
+        if (!signedInWithFarcaster) {
+          // Couldn't sign in with any password format
+          // Don't create a wallet account - the Farcaster account exists
+          toast({
+            title: 'Sign in with Farcaster',
+            description: `Your wallet is linked to Farcaster account @${existingConnection.farcaster_username}. Please use the Farcaster sign-in button to sign in.`,
+            variant: 'destructive',
+          });
+          throw new Error(
+            `Your wallet is linked to Farcaster account @${existingConnection.farcaster_username}, ` +
+            `but the password cannot be verified. Please sign in with Farcaster instead using the Farcaster sign-in button.`
+          );
         }
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      // If no existing account or couldn't sign in, create/sign in with wallet account
+      // BUT: Only if we didn't find an existing Farcaster account
+      if (!authUser && !existingConnection?.farcaster_fid) {
+        // Deterministic credentials from signature (proves ownership)
+        const walletEmail = `wallet_${addressWithoutPrefix}@faragent.local`;
+        // Use signature without 0x prefix for password (slice after removing 0x)
+        const signaturePart = normalizedSignature.replace('0x', '').slice(0, 40);
+        const addressPart = addressWithoutPrefix.slice(0, 4);
+        const walletPassword = `w_${signaturePart}_${addressPart}`;
 
-      const { data: { user: authUser } } = await supabase.auth.getUser();
+        const { error: signInError } = await signIn(walletEmail, walletPassword);
+
+        if (signInError) {
+          const { error: signUpError } = await signUp(walletEmail, walletPassword);
+
+          if (signUpError && !signUpError.message.includes('already registered')) {
+            throw signUpError;
+          }
+
+          if (signUpError?.message.includes('already registered')) {
+            const { error: retryError } = await signIn(walletEmail, walletPassword);
+            if (retryError) throw retryError;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        const { data: { user: userData } } = await supabase.auth.getUser();
+        authUser = userData;
+      }
+
+      // Update user_connections with wallet address (and preserve Farcaster data if it exists)
       if (authUser) {
-        await supabase
+        // Get existing connection to preserve Farcaster data
+        const { data: currentConnection } = await supabase
           .from('user_connections')
-          .upsert({ user_id: authUser.id, wallet_address: address }, { onConflict: 'user_id' });
+          .select('*')
+          .eq('user_id', authUser.id)
+          .maybeSingle();
+
+        // Prepare update data - preserve Farcaster data if it exists
+        const updateData: any = {
+          user_id: authUser.id,
+          wallet_address: normalizedAddress,
+        };
+
+        // Preserve existing Farcaster data if it exists
+        if (currentConnection?.farcaster_fid) {
+          updateData.farcaster_fid = currentConnection.farcaster_fid;
+          updateData.farcaster_username = currentConnection.farcaster_username;
+          updateData.farcaster_display_name = currentConnection.farcaster_display_name;
+          updateData.farcaster_pfp_url = currentConnection.farcaster_pfp_url;
+          updateData.farcaster_signer_uuid = currentConnection.farcaster_signer_uuid;
+        }
+
+        const { error: dbError } = await supabase
+          .from('user_connections')
+          .upsert(updateData, { onConflict: 'user_id' });
+
+        if (dbError) {
+          console.error('Error updating user_connections:', dbError);
+        } else {
+          console.log('Wallet address saved, Farcaster data preserved');
+          // Trigger reload of connections
+          window.dispatchEvent(new CustomEvent('wallet-connected'));
+          if (currentConnection?.farcaster_fid) {
+            window.dispatchEvent(new CustomEvent('farcaster-connected'));
+          }
+        }
       }
 
       toast({
@@ -190,28 +246,6 @@ export default function Auth() {
       >
         <Card className="glass border-border/50 shadow-2xl backdrop-blur-xl">
           <CardHeader className="text-center space-y-6 pb-2">
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
-              className="flex justify-center"
-            >
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-60 group-hover:opacity-80 transition-opacity" />
-                <div className="relative bg-gradient-primary p-5 rounded-3xl shadow-lg">
-                  <Bot className="h-12 w-12 text-white" />
-                </div>
-                <Sparkles className="absolute -top-1 -right-1 h-5 w-5 text-yellow-400 animate-pulse" />
-              </div>
-            </motion.div>
-            <div className="space-y-2">
-              <CardTitle className="text-3xl font-bold tracking-tight">
-                <span className="text-gradient">FarAgent</span>
-              </CardTitle>
-              <CardDescription className="text-base text-muted-foreground">
-                {isSignUp ? 'Create your account to get started' : 'Welcome back, agent'}
-              </CardDescription>
-            </div>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-4">
@@ -306,81 +340,6 @@ export default function Auth() {
               </motion.div>
             )}
 
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <Separator className="w-full bg-border/50" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-card px-3 text-muted-foreground">or continue with email</span>
-              </div>
-            </div>
-
-            {/* Email/Password Form */}
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">Email</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-secondary/50 border-border/50 focus:border-primary h-12 text-foreground placeholder:text-muted-foreground"
-                    autoComplete="email"
-                  />
-                </div>
-                {errors.email && (
-                  <p className="text-xs text-red-500">{errors.email}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-foreground">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-secondary/50 border-border/50 focus:border-primary h-12 text-foreground placeholder:text-muted-foreground"
-                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                  />
-                </div>
-                {errors.password && (
-                  <p className="text-xs text-red-500">{errors.password}</p>
-                )}
-              </div>
-
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-12 bg-gradient-primary text-white font-semibold shadow-lg hover:opacity-90 transition-all duration-300"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                ) : null}
-                {isSignUp ? 'Create Account' : 'Sign In'}
-              </Button>
-            </form>
-
-            <div className="text-center pt-2">
-              <button
-                type="button"
-                onClick={() => setIsSignUp(!isSignUp)}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                {isSignUp
-                  ? 'Already have an account? '
-                  : "Don't have an account? "}
-                <span className="text-primary font-medium hover:underline">
-                  {isSignUp ? 'Sign in' : 'Sign up'}
-                </span>
-              </button>
-            </div>
           </CardContent>
         </Card>
 

@@ -30,9 +30,48 @@ export async function requestWalletAddress(provider: any): Promise<string> {
 }
 
 export async function personalSign(provider: any, address: string, message: string): Promise<`0x${string}`> {
-  const signature = await provider.request({
-    method: "personal_sign",
-    params: [message, address],
-  });
-  return signature as `0x${string}`;
+  // Ensure address has 0x prefix and is lowercase
+  const normalizedAddress = address.startsWith('0x') 
+    ? address.toLowerCase() 
+    : `0x${address.toLowerCase()}`;
+
+  try {
+    // Try with plain message first (standard EIP-191 format)
+    // Most wallets accept plain string messages
+    const signature = await provider.request({
+      method: "personal_sign",
+      params: [message, normalizedAddress],
+    });
+    
+    // Ensure signature has 0x prefix
+    if (typeof signature === 'string') {
+      return signature.startsWith('0x') 
+        ? signature as `0x${string}`
+        : `0x${signature}` as `0x${string}`;
+    }
+    
+    return signature as `0x${string}`;
+  } catch (error: any) {
+    // If plain message fails, try hex-encoded message
+    if (error.message?.includes('hex') || error.message?.includes('0x')) {
+      console.log('Plain message failed, trying hex-encoded message...');
+      const messageHex = '0x' + Array.from(message)
+        .map(char => char.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('');
+      
+      const signature = await provider.request({
+        method: "personal_sign",
+        params: [messageHex, normalizedAddress],
+      });
+      
+      if (typeof signature === 'string') {
+        return signature.startsWith('0x') 
+          ? signature as `0x${string}`
+          : `0x${signature}` as `0x${string}`;
+      }
+      
+      return signature as `0x${string}`;
+    }
+    throw error;
+  }
 }
