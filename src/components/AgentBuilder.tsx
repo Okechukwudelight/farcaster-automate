@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bot, Play, Loader2, Settings, Zap, RefreshCw, Heart } from 'lucide-react';
+import { Play, Loader2, Settings, Zap, RefreshCw, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -280,28 +280,25 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.2 }}
     >
-      <Card className="glass border-border/50">
+      <Card className="glass border-border/50 w-full overflow-hidden">
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="p-2 rounded-lg bg-gradient-primary">
-                <Bot className="h-5 w-5 text-primary-foreground" />
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="min-w-0">
+                  <CardTitle className="text-base sm:text-lg">Agent Configuration</CardTitle>
+                  <CardDescription className="text-xs sm:text-sm">Define rules for automated actions</CardDescription>
+                </div>
               </div>
-              <div>
-                <CardTitle className="text-lg">Agent Configuration</CardTitle>
-                <CardDescription>Define rules for automated actions</CardDescription>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Switch
+                  checked={formData.isActive}
+                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
+                />
+                <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                  {formData.isActive ? 'Active' : 'Paused'}
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Switch
-                checked={formData.isActive}
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
-              />
-              <span className="text-sm text-muted-foreground">
-                {formData.isActive ? 'Active' : 'Paused'}
-              </span>
-            </div>
-          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
@@ -345,50 +342,50 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
 
           <div className="space-y-4">
             <Label>Actions</Label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 p-3 rounded-lg bg-secondary/50 border border-border/50 cursor-pointer hover:bg-secondary/80 transition-colors">
+            <div className="flex gap-2 sm:gap-4 flex-wrap">
+              <label className="flex items-center gap-2 p-2 sm:p-3 rounded-lg bg-secondary/50 border border-border/50 cursor-pointer hover:bg-secondary/80 transition-colors flex-1 min-w-[120px]">
                 <input
                   type="checkbox"
                   checked={formData.enableLike}
                   onChange={(e) => setFormData(prev => ({ ...prev, enableLike: e.target.checked }))}
                   className="sr-only"
                 />
-                <div className={`p-2 rounded-md ${formData.enableLike ? 'bg-destructive/20 text-destructive' : 'bg-muted text-muted-foreground'}`}>
-                  <Heart className="h-4 w-4" />
+                <div className={`p-1.5 sm:p-2 rounded-md flex-shrink-0 ${formData.enableLike ? 'bg-destructive/20 text-destructive' : 'bg-muted text-muted-foreground'}`}>
+                  <Heart className="h-3 w-3 sm:h-4 sm:w-4" />
                 </div>
-                <span className={`text-sm font-medium ${formData.enableLike ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <span className={`text-xs sm:text-sm font-medium ${formData.enableLike ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Like
                 </span>
               </label>
 
-              <label className="flex items-center gap-2 p-3 rounded-lg bg-secondary/50 border border-border/50 cursor-pointer hover:bg-secondary/80 transition-colors">
+              <label className="flex items-center gap-2 p-2 sm:p-3 rounded-lg bg-secondary/50 border border-border/50 cursor-pointer hover:bg-secondary/80 transition-colors flex-1 min-w-[120px]">
                 <input
                   type="checkbox"
                   checked={formData.enableRecast}
                   onChange={(e) => setFormData(prev => ({ ...prev, enableRecast: e.target.checked }))}
                   className="sr-only"
                 />
-                <div className={`p-2 rounded-md ${formData.enableRecast ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'}`}>
-                  <RefreshCw className="h-4 w-4" />
+                <div className={`p-1.5 sm:p-2 rounded-md flex-shrink-0 ${formData.enableRecast ? 'bg-green-400/20 text-green-400' : 'bg-muted text-muted-foreground'}`}>
+                  <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
                 </div>
-                <span className={`text-sm font-medium ${formData.enableRecast ? 'text-foreground' : 'text-muted-foreground'}`}>
+                <span className={`text-xs sm:text-sm font-medium ${formData.enableRecast ? 'text-foreground' : 'text-muted-foreground'}`}>
                   Recast
                 </span>
               </label>
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4">
             <Button
               onClick={handleSave}
               disabled={isLoading}
               variant="outline"
-              className="flex-1"
+              className="flex-1 text-xs sm:text-sm"
             >
               {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin sm:mr-2" />
               ) : (
-                <Settings className="h-4 w-4 mr-2" />
+                <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
               )}
               Save
             </Button>
@@ -396,12 +393,12 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
             <Button
               onClick={handleRun}
               disabled={isRunning || !farcaster.isConnected}
-              className="flex-1 bg-gradient-primary hover:opacity-90"
+              className="flex-1 bg-gradient-primary hover:opacity-90 text-xs sm:text-sm"
             >
               {isRunning ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin sm:mr-2" />
               ) : (
-                <Play className="h-4 w-4 mr-2" />
+                <Play className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
               )}
               Run Agent
             </Button>

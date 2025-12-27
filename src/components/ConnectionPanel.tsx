@@ -69,29 +69,29 @@ export function ConnectionPanel() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.1 }}
     >
-      <Card className="glass border-border/50">
+      <Card className="glass border-border/50 w-full overflow-hidden">
         <CardHeader>
-          <CardTitle className="text-lg">Connect Your Accounts</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-base sm:text-lg">Connect Your Accounts</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Link your wallet and Farcaster to enable agent actions
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Wallet Connection */}
-          <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 border border-border/50">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${wallet.isConnected ? 'bg-success/20 text-success' : 'bg-primary/20 text-primary'}`}>
-                <Wallet className="h-5 w-5" />
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 rounded-lg bg-secondary/50 border border-border/50">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className={`p-2 rounded-lg flex-shrink-0 ${wallet.isConnected ? 'bg-success/20 text-success' : 'bg-primary/20 text-primary'}`}>
+                <Wallet className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-sm">Wallet</p>
                 {wallet.isConnected ? (
-                  <div className="flex items-center gap-2">
-                    <p className="text-xs text-muted-foreground font-mono">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="text-xs text-muted-foreground font-mono truncate">
                       {formatAddress(wallet.address!)}
                     </p>
                     {wallet.walletType && (
-                      <span className="text-xs text-primary capitalize">({wallet.walletType})</span>
+                      <span className="text-xs text-primary capitalize flex-shrink-0">({wallet.walletType})</span>
                     )}
                   </div>
                 ) : (
@@ -101,75 +101,75 @@ export function ConnectionPanel() {
             </div>
             
             {wallet.isConnected ? (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
                 {!wallet.isOnBase && (
-                  <Button size="sm" variant="outline" onClick={wallet.switchToBase}>
+                  <Button size="sm" variant="outline" onClick={wallet.switchToBase} className="text-xs">
                     Switch to Base
                   </Button>
                 )}
-                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-success/20 text-success text-xs">
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-success/20 text-success text-xs whitespace-nowrap">
                   <Check className="h-3 w-3" />
                   {wallet.isOnBase ? 'Base' : 'Connected'}
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => wallet.connect('metamask')}
                   disabled={wallet.isConnecting}
-                  className="text-foreground"
+                  className="text-foreground text-xs"
                 >
                   {wallet.isConnecting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                   ) : (
                     <img 
                       src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
                       alt="MetaMask"
-                      className="w-4 h-4 mr-1"
+                      className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1"
                     />
                   )}
-                  MetaMask
+                  <span className="hidden sm:inline">MetaMask</span>
                 </Button>
                 <Button
                   size="sm"
                   onClick={() => wallet.connect('coinbase')}
                   disabled={wallet.isConnecting}
-                  className="bg-[#0052FF] hover:bg-[#0052FF]/90 text-white"
+                  className="bg-[#0052FF] hover:bg-[#0052FF]/90 text-white text-xs"
                 >
                   {wallet.isConnecting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
                   ) : (
-                    <svg viewBox="0 0 48 48" className="w-4 h-4 mr-1" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <svg viewBox="0 0 48 48" className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <circle cx="24" cy="24" r="24" fill="#0052FF"/>
                       <path d="M24 10C16.268 10 10 16.268 10 24s6.268 14 14 14 14-6.268 14-14S31.732 10 24 10zm-4.2 17.5a3.5 3.5 0 1 1 0-7h8.4a3.5 3.5 0 1 1 0 7h-8.4z" fill="#fff"/>
                     </svg>
                   )}
-                  Coinbase
+                  <span className="hidden sm:inline">Coinbase</span>
                 </Button>
               </div>
             )}
           </div>
 
           {/* Farcaster Connection */}
-          <div className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 border border-border/50">
-            <div className="flex items-center gap-3">
-              <div className={`p-2 rounded-lg ${farcaster.isConnected ? 'bg-farcaster-purple/20 text-farcaster-purple' : 'bg-farcaster-purple/20 text-farcaster-purple'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-4 rounded-lg bg-secondary/50 border border-border/50">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+              <div className={`p-2 rounded-lg flex-shrink-0 ${farcaster.isConnected ? 'bg-farcaster-purple/20 text-farcaster-purple' : 'bg-farcaster-purple/20 text-farcaster-purple'}`}>
                 {farcaster.isConnected && farcaster.user?.pfpUrl ? (
                   <img
                     src={farcaster.user.pfpUrl}
                     alt={farcaster.user.displayName}
-                    className="h-5 w-5 rounded-full"
+                    className="h-4 w-4 sm:h-5 sm:w-5 rounded-full"
                   />
                 ) : (
-                  <User className="h-5 w-5" />
+                  <User className="h-4 w-4 sm:h-5 sm:w-5" />
                 )}
               </div>
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="font-medium text-sm">Farcaster</p>
                 {farcaster.isConnected && farcaster.user ? (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground truncate">
                     @{farcaster.user.username}
                   </p>
                 ) : (
@@ -179,11 +179,11 @@ export function ConnectionPanel() {
             </div>
             
             {farcaster.isConnected ? (
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" onClick={farcaster.disconnect} className="text-muted-foreground hover:text-foreground">
+              <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap flex-shrink-0">
+                <Button size="sm" variant="ghost" onClick={farcaster.disconnect} className="text-muted-foreground hover:text-foreground text-xs">
                   Disconnect
                 </Button>
-                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-farcaster-purple/20 text-farcaster-purple text-xs">
+                <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-farcaster-purple/20 text-farcaster-purple text-xs whitespace-nowrap">
                   <Check className="h-3 w-3" />
                   Connected
                 </div>
@@ -193,10 +193,10 @@ export function ConnectionPanel() {
                 size="sm"
                 onClick={farcaster.connect}
                 disabled={farcaster.isConnecting}
-                className="bg-farcaster-purple hover:bg-farcaster-purple/90 text-white"
+                className="bg-farcaster-purple hover:bg-farcaster-purple/90 text-white text-xs flex-shrink-0"
               >
                 {farcaster.isConnecting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2 animate-spin" />
                 ) : null}
                 Connect
               </Button>

@@ -58,7 +58,7 @@ export function ActionLogs({ newActions }: ActionLogsProps) {
     if (type === 'like') {
       return <Heart className="h-4 w-4 text-destructive" />;
     }
-    return <RefreshCw className="h-4 w-4 text-success" />;
+    return <RefreshCw className="h-4 w-4 text-green-400" />;
   };
 
   const getStatusIcon = (status: 'success' | 'failed') => {
@@ -74,20 +74,20 @@ export function ActionLogs({ newActions }: ActionLogsProps) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.3 }}
     >
-      <Card className="glass border-border/50">
+      <Card className="glass border-border/50 w-full overflow-hidden">
         <CardHeader>
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-accent/20 text-accent">
               <Activity className="h-5 w-5" />
             </div>
-            <div>
-              <CardTitle className="text-lg">Action Logs</CardTitle>
-              <CardDescription>Recent agent activity</CardDescription>
+            <div className="min-w-0">
+              <CardTitle className="text-base sm:text-lg">Action Logs</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">Recent agent activity</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px] pr-4">
+          <ScrollArea className="h-[300px] sm:h-[400px] pr-2 sm:pr-4">
             {isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <div className="animate-pulse text-muted-foreground">Loading...</div>
@@ -112,7 +112,7 @@ export function ActionLogs({ newActions }: ActionLogsProps) {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex flex-col items-center gap-1">
-                          <div className={`p-1.5 rounded-md ${log.action_type === 'like' ? 'bg-destructive/20' : 'bg-success/20'}`}>
+                          <div className={`p-1.5 rounded-md ${log.action_type === 'like' ? 'bg-destructive/20' : 'bg-green-400/20'}`}>
                             {getActionIcon(log.action_type)}
                           </div>
                           {getStatusIcon(log.status)}

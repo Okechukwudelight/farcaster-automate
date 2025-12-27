@@ -1,4 +1,4 @@
-import { Bot, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { motion } from 'framer-motion';
@@ -12,30 +12,24 @@ export function Header() {
       animate={{ y: 0, opacity: 1 }}
       className="glass sticky top-0 z-50 border-b border-border/50"
     >
-      <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <div className="absolute inset-0 bg-gradient-primary rounded-xl blur-lg opacity-50" />
-            <div className="relative bg-gradient-primary p-2.5 rounded-xl">
-              <Bot className="h-6 w-6 text-primary-foreground" />
-            </div>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">FarAgent</h1>
+      <div className="w-full max-w-full mx-auto px-2 sm:px-4 py-3 sm:py-4 flex items-center justify-between gap-2 overflow-x-hidden">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="min-w-0">
+            <h1 className="text-lg sm:text-xl font-bold text-foreground truncate">FarAgent</h1>
             <p className="text-xs text-muted-foreground">Base × Farcaster</p>
           </div>
         </div>
 
         {user && (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
             <Button
               variant="ghost"
               size="sm"
               onClick={signOut}
-              className="text-muted-foreground hover:text-foreground"
+              className="text-muted-foreground hover:text-foreground text-xs sm:text-sm"
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
+              <LogOut className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Sign Out</span>
             </Button>
           </div>
         )}
