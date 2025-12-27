@@ -1,1 +1,4 @@
 project_id = "cypyvctjnuigziuassxe"
+
+[functions.neynar-config]
+verify_jwt = false
