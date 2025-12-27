@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bot, Loader2, Mail, Lock, ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/hooks/use-toast';
@@ -31,10 +30,25 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
-  // Farcaster lookup
-  const [showFarcasterDialog, setShowFarcasterDialog] = useState(false);
-  const [farcasterUsername, setFarcasterUsername] = useState('');
-  const [isLookingUpFarcaster, setIsLookingUpFarcaster] = useState(false);
+  // Farcaster SIWN state
+  const [isFarcasterLoading, setIsFarcasterLoading] = useState(false);
+  const [neynarClientId, setNeynarClientId] = useState<string | null>(null);
+
+  // Fetch Neynar client ID on mount
+  useEffect(() => {
+    const fetchNeynarConfig = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('neynar-config');
+        if (error) throw error;
+        if (data?.client_id) {
+          setNeynarClientId(data.client_id);
+        }
+      } catch (err) {
+        console.error('Failed to fetch Neynar config:', err);
+      }
+    };
+    fetchNeynarConfig();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -132,108 +146,139 @@ export default function Auth() {
     }
   };
 
-  const handleFarcasterConnect = () => {
-    setShowFarcasterDialog(true);
-  };
+  // Handle SIWN callback message from popup
+  const handleSIWNMessage = useCallback(async (event: MessageEvent) => {
+    // Only accept messages from Neynar
+    if (event.origin !== 'https://app.neynar.com') return;
+    
+    const data = event.data;
+    
+    // Check if this is a SIWN success message
+    if (data && data.signer_uuid && data.fid) {
+      console.log('SIWN success:', data);
+      
+      try {
+        const fcUser = data.user || {};
+        const fid = data.fid;
+        const signerUuid = data.signer_uuid;
+        const username = fcUser.username || `fid_${fid}`;
+        const displayName = fcUser.display_name || username;
+        const pfpUrl = fcUser.pfp_url || '';
 
-  const lookupFarcasterUser = async () => {
-    if (!farcasterUsername.trim()) {
+        toast({
+          title: 'Farcaster Verified',
+          description: `Welcome @${username}! Creating your account...`,
+        });
+
+        // Generate deterministic credentials from verified fid
+        const farcasterEmail = `farcaster_${fid}@faragent.local`;
+        const farcasterPassword = `fc_${fid}_${signerUuid}_secure_pwd`;
+
+        // Try to sign in first (existing user)
+        const { error: signInError } = await signIn(farcasterEmail, farcasterPassword);
+
+        if (signInError) {
+          // If sign in fails, create new account
+          const { error: signUpError } = await signUp(farcasterEmail, farcasterPassword);
+          
+          if (signUpError && !signUpError.message.includes('already registered')) {
+            throw signUpError;
+          }
+
+          // If already registered, try signing in again
+          if (signUpError?.message.includes('already registered')) {
+            const { error: retryError } = await signIn(farcasterEmail, farcasterPassword);
+            if (retryError) throw retryError;
+          }
+        }
+
+        // Wait for auth state to update
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Get current user and save Farcaster connection with signer
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        
+        if (authUser) {
+          await supabase
+            .from('user_connections')
+            .upsert({
+              user_id: authUser.id,
+              farcaster_fid: fid,
+              farcaster_username: username,
+              farcaster_display_name: displayName,
+              farcaster_pfp_url: pfpUrl,
+              farcaster_signer_uuid: signerUuid,
+            }, { onConflict: 'user_id' });
+        }
+
+        toast({
+          title: 'Welcome!',
+          description: `Signed in as @${username}`,
+        });
+
+        navigate('/');
+      } catch (error: any) {
+        console.error('Farcaster auth error:', error);
+        toast({
+          title: 'Authentication Failed',
+          description: error.message || 'Could not complete Farcaster sign in',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsFarcasterLoading(false);
+      }
+    }
+  }, [signIn, signUp, toast, navigate]);
+
+  // Set up message listener for SIWN
+  useEffect(() => {
+    window.addEventListener('message', handleSIWNMessage);
+    return () => window.removeEventListener('message', handleSIWNMessage);
+  }, [handleSIWNMessage]);
+
+  const handleFarcasterConnect = () => {
+    if (!neynarClientId) {
       toast({
-        title: 'Enter username',
-        description: 'Please enter your Farcaster username',
+        title: 'Configuration Missing',
+        description: 'Farcaster sign-in is not configured. Please add NEYNAR_CLIENT_ID.',
         variant: 'destructive',
       });
       return;
     }
 
-    setIsLookingUpFarcaster(true);
+    setIsFarcasterLoading(true);
 
-    try {
-      // Lookup user by username (free API)
-      const username = farcasterUsername.replace('@', '').trim();
-      
-      const response = await fetch(`https://api.neynar.com/v2/farcaster/user/by_username?username=${username}`, {
-        headers: {
-          'api_key': 'NEYNAR_API_DOCS', // Public demo key for user lookup
-        },
-      });
+    // Open SIWN popup
+    const authUrl = `https://app.neynar.com/login?client_id=${neynarClientId}`;
+    const width = 500;
+    const height = 700;
+    const left = window.screen.width / 2 - width / 2;
+    const top = window.screen.height / 2 - height / 2;
+    
+    const popup = window.open(
+      authUrl,
+      'Sign in with Farcaster',
+      `width=${width},height=${height},left=${left},top=${top},popup=1`
+    );
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'User not found');
-      }
-
-      const userData = await response.json();
-      const fcUser = userData.user;
-
-      if (!fcUser) {
-        throw new Error('Farcaster user not found');
-      }
-
+    // Check if popup was blocked
+    if (!popup) {
       toast({
-        title: 'Farcaster User Found',
-        description: `Found @${fcUser.username}. Signing you in...`,
-      });
-
-      // Generate a deterministic email and password from fid
-      const farcasterEmail = `farcaster_${fcUser.fid}@faragent.local`;
-      const farcasterPassword = `fc_${fcUser.fid}_${fcUser.username}_secure_pwd`;
-
-      // Try to sign in first (existing user)
-      const { error: signInError } = await signIn(farcasterEmail, farcasterPassword);
-
-      if (signInError) {
-        // If sign in fails, create new account
-        const { error: signUpError } = await signUp(farcasterEmail, farcasterPassword);
-        
-        if (signUpError && !signUpError.message.includes('already registered')) {
-          throw signUpError;
-        }
-
-        // If already registered, try signing in again
-        if (signUpError?.message.includes('already registered')) {
-          const { error: retryError } = await signIn(farcasterEmail, farcasterPassword);
-          if (retryError) throw retryError;
-        }
-      }
-
-      // Wait for auth state to update
-      await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Get current user and save Farcaster connection
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      
-      if (authUser) {
-        await supabase
-          .from('user_connections')
-          .upsert({
-            user_id: authUser.id,
-            farcaster_fid: fcUser.fid,
-            farcaster_username: fcUser.username,
-            farcaster_display_name: fcUser.display_name,
-            farcaster_pfp_url: fcUser.pfp_url,
-          }, { onConflict: 'user_id' });
-      }
-
-      setShowFarcasterDialog(false);
-      sessionStorage.removeItem('pendingFarcasterUser');
-
-      toast({
-        title: 'Welcome!',
-        description: `Signed in as @${fcUser.username}`,
-      });
-
-      navigate('/');
-    } catch (error: any) {
-      console.error('Farcaster login error:', error);
-      toast({
-        title: 'Login Failed',
-        description: error.message || 'Could not sign in with Farcaster',
+        title: 'Popup Blocked',
+        description: 'Please allow popups for this site to sign in with Farcaster',
         variant: 'destructive',
       });
+      setIsFarcasterLoading(false);
+      return;
     }
 
-    setIsLookingUpFarcaster(false);
+    // Poll to check if popup was closed without completing auth
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        setIsFarcasterLoading(false);
+      }
+    }, 500);
   };
 
   return (
@@ -344,7 +389,8 @@ export default function Auth() {
               <button
                 type="button"
                 onClick={handleFarcasterConnect}
-                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-purple-500/30 transition-all duration-300 group"
+                disabled={isFarcasterLoading}
+                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-purple-500/30 transition-all duration-300 group disabled:opacity-50"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
@@ -357,10 +403,16 @@ export default function Auth() {
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-foreground">Continue with Farcaster</p>
-                    <p className="text-xs text-muted-foreground">Sign in with your Farcaster account</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isFarcasterLoading ? 'Waiting for authentication...' : 'Sign in with your Farcaster account'}
+                    </p>
                   </div>
                 </div>
-                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
+                {isFarcasterLoading ? (
+                  <Loader2 className="h-5 w-5 text-purple-500 animate-spin" />
+                ) : (
+                  <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-purple-500 group-hover:translate-x-1 transition-all" />
+                )}
               </button>
             </div>
 
@@ -467,50 +519,6 @@ export default function Auth() {
           Built on Base × Farcaster
         </motion.p>
       </motion.div>
-
-      {/* Farcaster Username Dialog */}
-      <Dialog open={showFarcasterDialog} onOpenChange={setShowFarcasterDialog}>
-        <DialogContent className="glass border-border/50">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <svg viewBox="0 0 1000 1000" className="w-6 h-6" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect width="1000" height="1000" rx="200" fill="#8A63D2"/>
-                <path d="M257.778 155.556H742.222V844.444H671.111V528.889H670.414C662.554 441.677 589.258 373.333 500 373.333C410.742 373.333 337.446 441.677 329.586 528.889H328.889V844.444H257.778V155.556Z" fill="white"/>
-                <path d="M128.889 253.333L157.778 351.111H182.222V746.667C169.949 746.667 160 756.616 160 768.889V795.556H155.556C143.283 795.556 133.333 805.505 133.333 817.778V844.444H382.222V817.778C382.222 805.505 372.273 795.556 360 795.556H355.556V768.889C355.556 756.616 345.606 746.667 333.333 746.667H306.667V351.111H331.111L360 253.333H128.889Z" fill="white"/>
-                <path d="M640 253.333L668.889 351.111H693.333V746.667C681.06 746.667 671.111 756.616 671.111 768.889V795.556H666.667C654.394 795.556 644.444 805.505 644.444 817.778V844.444H893.333V817.778C893.333 805.505 883.384 795.556 871.111 795.556H866.667V768.889C866.667 756.616 856.717 746.667 844.444 746.667H817.778V351.111H842.222L871.111 253.333H640Z" fill="white"/>
-              </svg>
-              Connect Farcaster
-            </DialogTitle>
-            <DialogDescription>
-              Enter your Farcaster username to create a signer for automated actions
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 pt-4">
-            <div className="space-y-2">
-              <Label htmlFor="fc-username">Farcaster Username</Label>
-              <Input
-                id="fc-username"
-                placeholder="@yourname"
-                value={farcasterUsername}
-                onChange={(e) => setFarcasterUsername(e.target.value)}
-                className="bg-secondary/50 border-border/50 h-12"
-              />
-            </div>
-            
-            <Button
-              onClick={lookupFarcasterUser}
-              disabled={isLookingUpFarcaster}
-              className="w-full h-12 bg-purple-600 hover:bg-purple-700 text-white"
-            >
-              {isLookingUpFarcaster ? (
-                <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              ) : null}
-              Connect Farcaster
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
