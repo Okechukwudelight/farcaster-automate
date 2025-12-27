@@ -107,7 +107,19 @@ export function FarcasterSignIn({ open, onOpenChange }: FarcasterSignInProps) {
     }
   }, [signIn, signUp, toast, navigate, onOpenChange]);
 
-  const { signIn: startSignIn, url, isSuccess, isError, error, data, isPolling } = useSignIn({
+  const { 
+    signIn: startSignIn, 
+    connect,
+    reconnect,
+    url, 
+    isConnected,
+    isSuccess, 
+    isError, 
+    error, 
+    data, 
+    isPolling,
+    channelToken,
+  } = useSignIn({
     onSuccess: handleSuccess,
     onError: (err) => {
       console.error('Farcaster AuthKit error:', err);
@@ -123,23 +135,39 @@ export function FarcasterSignIn({ open, onOpenChange }: FarcasterSignInProps) {
     if (open && !hasStarted) {
       setHasStarted(true);
       console.log('Starting Farcaster sign-in...');
-      startSignIn();
+      // Try connect first, then signIn
+      try {
+        connect();
+        startSignIn();
+      } catch (e) {
+        console.error('Error starting Farcaster auth:', e);
+      }
     }
 
     if (!open && hasStarted) {
       setHasStarted(false);
     }
-  }, [open, hasStarted, startSignIn]);
+  }, [open, hasStarted, connect, startSignIn]);
 
   // Debug: log state changes
   useEffect(() => {
-    console.log('Farcaster state:', { url, isPolling, isSuccess, isError, error: error?.message });
-  }, [url, isPolling, isSuccess, isError, error]);
+    console.log('Farcaster state:', { 
+      url, 
+      isPolling, 
+      isSuccess, 
+      isError, 
+      isConnected,
+      channelToken,
+      error: error?.message 
+    });
+  }, [url, isPolling, isSuccess, isError, isConnected, channelToken, error]);
 
   const handleStartSignIn = useCallback(() => {
     setHasStarted(true);
+    console.log('Manual start triggered');
+    connect();
     startSignIn();
-  }, [startSignIn]);
+  }, [connect, startSignIn]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -241,8 +269,10 @@ export function FarcasterSignIn({ open, onOpenChange }: FarcasterSignInProps) {
           )}
 
           {/* Debug panel */}
-          <div className="w-full p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground space-y-1">
+          <div className="w-full p-3 rounded-lg bg-muted/50 text-xs text-muted-foreground space-y-1 font-mono">
             <p><span className="font-medium">Status:</span> {isPolling ? 'Polling' : isSuccess ? 'Success' : isError ? 'Error' : hasStarted ? 'Started' : 'Idle'}</p>
+            <p><span className="font-medium">Connected:</span> {isConnected ? 'Yes' : 'No'}</p>
+            <p><span className="font-medium">Channel:</span> {channelToken ? channelToken.slice(0, 12) + '...' : 'None'}</p>
             <p><span className="font-medium">URL:</span> {url ? 'Generated ✓' : 'Not yet'}</p>
             {error && <p className="text-red-400"><span className="font-medium">Error:</span> {error.message}</p>}
           </div>
