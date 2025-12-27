@@ -1,5 +1,4 @@
 import { useState, useCallback } from 'react';
-import { BrowserProvider } from 'ethers';
 
 interface WalletState {
   address: string | null;
@@ -7,6 +6,7 @@ interface WalletState {
   isConnected: boolean;
   chainId: number | null;
   error: string | null;
+  walletType: 'metamask' | 'coinbase' | null;
 }
 
 const BASE_CHAIN_ID = 8453;
@@ -19,13 +19,47 @@ export function useWallet() {
     isConnected: false,
     chainId: null,
     error: null,
+    walletType: null,
   });
 
-  const connect = useCallback(async () => {
-    if (typeof window.ethereum === 'undefined') {
+  const getProvider = (type: 'metamask' | 'coinbase') => {
+    if (type === 'coinbase') {
+      // Check for Coinbase Wallet
+      if ((window as any).coinbaseWalletExtension) {
+        return (window as any).coinbaseWalletExtension;
+      }
+      // Coinbase Wallet can also be in ethereum provider
+      if (window.ethereum?.isCoinbaseWallet) {
+        return window.ethereum;
+      }
+      // Check providers array
+      if (window.ethereum?.providers) {
+        return window.ethereum.providers.find((p: any) => p.isCoinbaseWallet);
+      }
+    }
+    
+    if (type === 'metamask') {
+      // Check providers array first for MetaMask
+      if (window.ethereum?.providers) {
+        return window.ethereum.providers.find((p: any) => p.isMetaMask && !p.isCoinbaseWallet);
+      }
+      if (window.ethereum?.isMetaMask) {
+        return window.ethereum;
+      }
+    }
+    
+    // Fallback to default ethereum provider
+    return window.ethereum;
+  };
+
+  const connect = useCallback(async (type: 'metamask' | 'coinbase' = 'metamask') => {
+    const provider = getProvider(type);
+    
+    if (!provider) {
+      const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
       setState(prev => ({
         ...prev,
-        error: 'Please install MetaMask or another Web3 wallet',
+        error: `Please install ${walletName}`,
       }));
       return;
     }
@@ -33,12 +67,11 @@ export function useWallet() {
     setState(prev => ({ ...prev, isConnecting: true, error: null }));
 
     try {
-      const provider = new BrowserProvider(window.ethereum);
-      const accounts = await provider.send('eth_requestAccounts', []);
-      const network = await provider.getNetwork();
+      const accounts = await provider.request({ method: 'eth_requestAccounts' });
+      const chainIdHex = await provider.request({ method: 'eth_chainId' });
 
       const address = accounts[0];
-      const chainId = Number(network.chainId);
+      const chainId = parseInt(chainIdHex, 16);
 
       setState({
         address,
@@ -46,10 +79,11 @@ export function useWallet() {
         isConnected: true,
         chainId,
         error: null,
+        walletType: type,
       });
 
       // Listen for account changes
-      window.ethereum.on('accountsChanged', (accounts: string[]) => {
+      provider.on('accountsChanged', (accounts: string[]) => {
         if (accounts.length === 0) {
           setState({
             address: null,
@@ -57,6 +91,7 @@ export function useWallet() {
             isConnected: false,
             chainId: null,
             error: null,
+            walletType: null,
           });
         } else {
           setState(prev => ({ ...prev, address: accounts[0] }));
@@ -64,7 +99,7 @@ export function useWallet() {
       });
 
       // Listen for chain changes
-      window.ethereum.on('chainChanged', (chainIdHex: string) => {
+      provider.on('chainChanged', (chainIdHex: string) => {
         setState(prev => ({ ...prev, chainId: parseInt(chainIdHex, 16) }));
       });
 
@@ -84,14 +119,16 @@ export function useWallet() {
       isConnected: false,
       chainId: null,
       error: null,
+      walletType: null,
     });
   }, []);
 
   const switchToBase = useCallback(async () => {
-    if (!window.ethereum) return;
+    const provider = state.walletType ? getProvider(state.walletType) : window.ethereum;
+    if (!provider) return;
 
     try {
-      await window.ethereum.request({
+      await provider.request({
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: `0x${BASE_CHAIN_ID.toString(16)}` }],
       });
@@ -99,7 +136,7 @@ export function useWallet() {
       // Chain not added, try to add it
       if (error.code === 4902) {
         try {
-          await window.ethereum.request({
+          await provider.request({
             method: 'wallet_addEthereumChain',
             params: [{
               chainId: `0x${BASE_CHAIN_ID.toString(16)}`,
@@ -114,7 +151,7 @@ export function useWallet() {
         }
       }
     }
-  }, []);
+  }, [state.walletType]);
 
   const isOnBase = state.chainId === BASE_CHAIN_ID || state.chainId === BASE_SEPOLIA_CHAIN_ID;
 

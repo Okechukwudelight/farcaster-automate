@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Wallet, User, Check, Loader2, ExternalLink } from 'lucide-react';
+import { Wallet, User, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useWallet } from '@/hooks/useWallet';
@@ -41,9 +41,14 @@ export function ConnectionPanel() {
               <div>
                 <p className="font-medium text-sm">Wallet</p>
                 {wallet.isConnected ? (
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {formatAddress(wallet.address!)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-muted-foreground font-mono">
+                      {formatAddress(wallet.address!)}
+                    </p>
+                    {wallet.walletType && (
+                      <span className="text-xs text-primary capitalize">({wallet.walletType})</span>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">Not connected</p>
                 )}
@@ -63,17 +68,42 @@ export function ConnectionPanel() {
                 </div>
               </div>
             ) : (
-              <Button
-                size="sm"
-                onClick={wallet.connect}
-                disabled={wallet.isConnecting}
-                className="bg-gradient-primary hover:opacity-90"
-              >
-                {wallet.isConnecting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : null}
-                Connect
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => wallet.connect('metamask')}
+                  disabled={wallet.isConnecting}
+                  className="text-foreground"
+                >
+                  {wallet.isConnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <img 
+                      src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
+                      alt="MetaMask"
+                      className="w-4 h-4 mr-1"
+                    />
+                  )}
+                  MetaMask
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => wallet.connect('coinbase')}
+                  disabled={wallet.isConnecting}
+                  className="bg-[#0052FF] hover:bg-[#0052FF]/90 text-white"
+                >
+                  {wallet.isConnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <svg viewBox="0 0 48 48" className="w-4 h-4 mr-1" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="24" cy="24" r="24" fill="#0052FF"/>
+                      <path d="M24 10C16.268 10 10 16.268 10 24s6.268 14 14 14 14-6.268 14-14S31.732 10 24 10zm-4.2 17.5a3.5 3.5 0 1 1 0-7h8.4a3.5 3.5 0 1 1 0 7h-8.4z" fill="#fff"/>
+                    </svg>
+                  )}
+                  Coinbase
+                </Button>
+              </div>
             )}
           </div>
 
@@ -105,7 +135,7 @@ export function ConnectionPanel() {
             
             {farcaster.isConnected ? (
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="ghost" onClick={farcaster.disconnect}>
+                <Button size="sm" variant="ghost" onClick={farcaster.disconnect} className="text-muted-foreground hover:text-foreground">
                   Disconnect
                 </Button>
                 <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-farcaster-purple/20 text-farcaster-purple text-xs">
@@ -118,7 +148,7 @@ export function ConnectionPanel() {
                 size="sm"
                 onClick={farcaster.connect}
                 disabled={farcaster.isConnecting}
-                className="bg-farcaster-purple hover:bg-farcaster-purple/90"
+                className="bg-farcaster-purple hover:bg-farcaster-purple/90 text-white"
               >
                 {farcaster.isConnecting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />

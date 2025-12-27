@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bot, Loader2, Mail, Lock } from 'lucide-react';
+import { Bot, Loader2, Mail, Lock, Wallet, User, ArrowRight, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 import { useAuth } from '@/hooks/useAuth';
+import { useWallet } from '@/hooks/useWallet';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
 import { z } from 'zod';
@@ -17,7 +19,8 @@ const authSchema = z.object({
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user } = useAuth();
+  const wallet = useWallet();
   const { toast } = useToast();
 
   const [isSignUp, setIsSignUp] = useState(false);
@@ -26,11 +29,16 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
 
-    // Validate input
     const result = authSchema.safeParse({ email, password });
     if (!result.success) {
       const fieldErrors: { email?: string; password?: string } = {};
@@ -72,39 +80,162 @@ export default function Auth() {
     setIsLoading(false);
   };
 
+  const handleWalletConnect = async (type: 'metamask' | 'coinbase') => {
+    await wallet.connect(type);
+    if (wallet.isConnected) {
+      toast({
+        title: 'Wallet Connected',
+        description: 'Now create an account or sign in to link your wallet',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background relative overflow-hidden">
-      {/* Background effects */}
-      <div className="absolute inset-0 bg-gradient-glow opacity-50" />
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-primary/10 rounded-full blur-3xl animate-pulse-slow" />
-      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-accent/10 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1.5s' }} />
+      {/* Animated background */}
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-to-br from-primary/20 via-transparent to-transparent rounded-full blur-3xl animate-pulse-slow" />
+        <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-to-tl from-accent/20 via-transparent to-transparent rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/4 right-1/4 w-64 h-64 bg-primary/10 rounded-full blur-2xl animate-float" />
+        <div className="absolute bottom-1/4 left-1/4 w-48 h-48 bg-accent/10 rounded-full blur-2xl animate-float" style={{ animationDelay: '3s' }} />
+      </div>
+
+      {/* Grid pattern overlay */}
+      <div 
+        className="absolute inset-0 opacity-[0.02]"
+        style={{
+          backgroundImage: `linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)`,
+          backgroundSize: '50px 50px'
+        }}
+      />
 
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-md relative z-10"
       >
-        <Card className="glass border-border/50 shadow-glow">
-          <CardHeader className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="relative">
-                <div className="absolute inset-0 bg-gradient-primary rounded-2xl blur-xl opacity-50" />
-                <div className="relative bg-gradient-primary p-4 rounded-2xl">
-                  <Bot className="h-10 w-10 text-primary-foreground" />
+        <Card className="glass border-border/50 shadow-2xl backdrop-blur-xl">
+          <CardHeader className="text-center space-y-6 pb-2">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+              className="flex justify-center"
+            >
+              <div className="relative group">
+                <div className="absolute inset-0 bg-gradient-primary rounded-3xl blur-2xl opacity-60 group-hover:opacity-80 transition-opacity" />
+                <div className="relative bg-gradient-primary p-5 rounded-3xl shadow-lg">
+                  <Bot className="h-12 w-12 text-primary-foreground" />
                 </div>
+                <Sparkles className="absolute -top-1 -right-1 h-5 w-5 text-warning animate-pulse" />
               </div>
-            </div>
-            <div>
-              <CardTitle className="text-2xl font-bold">FarAgent</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                {isSignUp ? 'Create your account' : 'Sign in to your account'}
+            </motion.div>
+            <div className="space-y-2">
+              <CardTitle className="text-3xl font-bold tracking-tight">
+                <span className="text-gradient">FarAgent</span>
+              </CardTitle>
+              <CardDescription className="text-base text-muted-foreground">
+                {isSignUp ? 'Create your account to get started' : 'Welcome back, agent'}
               </CardDescription>
             </div>
           </CardHeader>
-          <CardContent>
+
+          <CardContent className="space-y-6 pt-4">
+            {/* Wallet & Farcaster Connect Options */}
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => handleWalletConnect('metamask')}
+                disabled={wallet.isConnecting}
+                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-primary/30 transition-all duration-300 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#F6851B]/10 flex items-center justify-center">
+                    <img 
+                      src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
+                      alt="MetaMask"
+                      className="w-6 h-6"
+                    />
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-foreground">Continue with MetaMask</p>
+                    <p className="text-xs text-muted-foreground">Connect your MetaMask wallet</p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleWalletConnect('coinbase')}
+                disabled={wallet.isConnecting}
+                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-primary/30 transition-all duration-300 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#0052FF]/10 flex items-center justify-center">
+                    <svg viewBox="0 0 48 48" className="w-6 h-6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="24" cy="24" r="24" fill="#0052FF"/>
+                      <path d="M24 10C16.268 10 10 16.268 10 24s6.268 14 14 14 14-6.268 14-14S31.732 10 24 10zm-4.2 17.5a3.5 3.5 0 1 1 0-7h8.4a3.5 3.5 0 1 1 0 7h-8.4z" fill="#fff"/>
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-foreground">Continue with Coinbase</p>
+                    <p className="text-xs text-muted-foreground">Connect Coinbase Wallet</p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+              </button>
+
+              <button
+                type="button"
+                className="w-full flex items-center justify-between p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-farcaster-purple/30 transition-all duration-300 group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-farcaster-purple/10 flex items-center justify-center">
+                    <svg viewBox="0 0 1000 1000" className="w-6 h-6" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect width="1000" height="1000" rx="200" fill="#8A63D2"/>
+                      <path d="M257.778 155.556H742.222V844.444H671.111V528.889H670.414C662.554 441.677 589.258 373.333 500 373.333C410.742 373.333 337.446 441.677 329.586 528.889H328.889V844.444H257.778V155.556Z" fill="white"/>
+                      <path d="M128.889 253.333L157.778 351.111H182.222V746.667C169.949 746.667 160 756.616 160 768.889V795.556H155.556C143.283 795.556 133.333 805.505 133.333 817.778V844.444H382.222V817.778C382.222 805.505 372.273 795.556 360 795.556H355.556V768.889C355.556 756.616 345.606 746.667 333.333 746.667H306.667V351.111H331.111L360 253.333H128.889Z" fill="white"/>
+                      <path d="M640 253.333L668.889 351.111H693.333V746.667C681.06 746.667 671.111 756.616 671.111 768.889V795.556H666.667C654.394 795.556 644.444 805.505 644.444 817.778V844.444H893.333V817.778C893.333 805.505 883.384 795.556 871.111 795.556H866.667V768.889C866.667 756.616 856.717 746.667 844.444 746.667H817.778V351.111H842.222L871.111 253.333H640Z" fill="white"/>
+                    </svg>
+                  </div>
+                  <div className="text-left">
+                    <p className="font-medium text-foreground">Continue with Farcaster</p>
+                    <p className="text-xs text-muted-foreground">Sign in with your Farcaster account</p>
+                  </div>
+                </div>
+                <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-farcaster-purple group-hover:translate-x-1 transition-all" />
+              </button>
+            </div>
+
+            {/* Connected wallet indicator */}
+            {wallet.isConnected && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="flex items-center gap-2 p-3 rounded-lg bg-success/10 border border-success/30 text-success"
+              >
+                <Wallet className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  Connected: {wallet.address?.slice(0, 6)}...{wallet.address?.slice(-4)}
+                </span>
+              </motion.div>
+            )}
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator className="w-full" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-3 text-muted-foreground">or continue with email</span>
+              </div>
+            </div>
+
+            {/* Email/Password Form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-foreground">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -113,7 +244,7 @@ export default function Auth() {
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-secondary/50"
+                    className="pl-10 bg-secondary/50 border-border/50 focus:border-primary h-12"
                     autoComplete="email"
                   />
                 </div>
@@ -123,7 +254,7 @@ export default function Auth() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password" className="text-foreground">Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -132,7 +263,7 @@ export default function Auth() {
                     placeholder="••••••••"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-secondary/50"
+                    className="pl-10 bg-secondary/50 border-border/50 focus:border-primary h-12"
                     autoComplete={isSignUp ? 'new-password' : 'current-password'}
                   />
                 </div>
@@ -144,28 +275,41 @@ export default function Auth() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-primary hover:opacity-90"
+                className="w-full h-12 bg-gradient-primary hover:opacity-90 text-primary-foreground font-semibold shadow-lg hover:shadow-primary/25 transition-all duration-300"
               >
                 {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
                 ) : null}
                 {isSignUp ? 'Create Account' : 'Sign In'}
               </Button>
             </form>
 
-            <div className="mt-6 text-center">
+            <div className="text-center pt-2">
               <button
                 type="button"
                 onClick={() => setIsSignUp(!isSignUp)}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors"
               >
                 {isSignUp
-                  ? 'Already have an account? Sign in'
-                  : "Don't have an account? Sign up"}
+                  ? 'Already have an account? '
+                  : "Don't have an account? "}
+                <span className="text-primary font-medium hover:underline">
+                  {isSignUp ? 'Sign in' : 'Sign up'}
+                </span>
               </button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Footer text */}
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="text-center text-xs text-muted-foreground/60 mt-6"
+        >
+          Built on Base × Farcaster
+        </motion.p>
       </motion.div>
     </div>
   );
