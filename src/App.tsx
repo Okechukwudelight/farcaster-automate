@@ -14,6 +14,7 @@ const queryClient = new QueryClient();
 
 // Farcaster AuthKit config
 const farcasterConfig = {
+  relay: "https://relay.farcaster.xyz",
   rpcUrl: "https://mainnet.optimism.io",
   domain: window.location.host,
   siweUri: window.location.origin,
