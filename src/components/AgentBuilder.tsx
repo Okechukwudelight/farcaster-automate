@@ -1,16 +1,15 @@
-import { useState, useEffect } from 'react';
-import { Play, Loader2, Settings, Zap, RefreshCw, Heart } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Play, Loader2, Settings, RefreshCw, Heart, X, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useFarcaster } from '@/hooks/useFarcaster';
 import { useToast } from '@/hooks/use-toast';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface Agent {
   id: string;
@@ -25,6 +24,32 @@ interface AgentBuilderProps {
   onAgentRun: (results: any[]) => void;
 }
 
+interface ChipProps {
+  label: string;
+  onRemove: () => void;
+}
+
+function Chip({ label, onRemove }: ChipProps) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-secondary/50 border border-border/50 text-sm"
+    >
+      <span className="text-foreground">{label}</span>
+      <button
+        type="button"
+        onClick={onRemove}
+        className="hover:bg-destructive/20 rounded-full p-0.5 transition-colors"
+        aria-label={`Remove ${label}`}
+      >
+        <X className="h-3 w-3 text-muted-foreground hover:text-destructive" />
+      </button>
+    </motion.div>
+  );
+}
+
 export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
   const { user } = useAuth();
   const farcaster = useFarcaster();
@@ -33,11 +58,21 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
   const [agent, setAgent] = useState<Agent | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const [keywords, setKeywords] = useState<string[]>([]);
+  const [accounts, setAccounts] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [accountInput, setAccountInput] = useState('');
+  
+  const [usernameSuggestions, setUsernameSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isSearchingUsernames, setIsSearchingUsernames] = useState(false);
+  const accountInputRef = useRef<HTMLInputElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     name: 'My Agent',
-    keywords: '',
-    accounts: '',
     enableLike: true,
     enableRecast: true,
     isActive: true,
@@ -59,12 +94,12 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
         setAgent(data as Agent);
         setFormData({
           name: data.name,
-          keywords: (data.keywords || []).join(', '),
-          accounts: (data.accounts || []).join(', '),
           enableLike: data.action_type === 'like' || data.action_type === 'both',
           enableRecast: data.action_type === 'recast' || data.action_type === 'both',
           isActive: data.is_active,
         });
+        setKeywords(data.keywords || []);
+        setAccounts(data.accounts || []);
       }
       setIsLoading(false);
     };
@@ -72,26 +107,174 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
     loadAgent();
   }, [user]);
 
+  // Search Farcaster usernames
+  useEffect(() => {
+    const searchUsernames = async () => {
+      if (accountInput.length < 2) {
+        setUsernameSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+
+      if (!user) {
+        // User must be authenticated to search
+        return;
+      }
+
+      setIsSearchingUsernames(true);
+      try {
+        // Call edge function to search usernames
+        // Note: This requires the edge function to be deployed to Supabase
+        const { data, error } = await supabase.functions.invoke('farcaster-actions', {
+          body: {
+            action: 'search_usernames',
+            query: accountInput.replace('@', '').trim(),
+          },
+        });
+
+        if (error) {
+          // If 401 or 404, the edge function might not be deployed
+          // Silently fail - users can still type usernames manually
+          if (error.status === 401 || error.status === 404) {
+            console.log('Edge function not available - autocomplete disabled. Users can still type usernames manually.');
+          } else {
+            console.error('Error searching usernames:', error);
+          }
+          setUsernameSuggestions([]);
+          setShowSuggestions(false);
+          return;
+        }
+
+        if (data && typeof data === 'object' && 'usernames' in data && Array.isArray(data.usernames)) {
+          setUsernameSuggestions(data.usernames.slice(0, 5));
+          setShowSuggestions(true);
+        } else {
+          setUsernameSuggestions([]);
+          setShowSuggestions(false);
+        }
+      } catch (error: any) {
+        // Silently fail - don't show error to user for autocomplete
+        // Users can still type and add usernames manually
+        if (error?.status !== 401 && error?.status !== 404) {
+          console.error('Error searching usernames:', error);
+        }
+        setUsernameSuggestions([]);
+        setShowSuggestions(false);
+      } finally {
+        setIsSearchingUsernames(false);
+      }
+    };
+
+    const debounceTimer = setTimeout(searchUsernames, 500); // Increased debounce to reduce API calls
+    return () => clearTimeout(debounceTimer);
+  }, [accountInput, user]);
+
+  // Close suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        suggestionsRef.current &&
+        !suggestionsRef.current.contains(event.target as Node) &&
+        accountInputRef.current &&
+        !accountInputRef.current.contains(event.target as Node)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const getActionType = (): 'like' | 'recast' | 'both' => {
     if (formData.enableLike && formData.enableRecast) return 'both';
     if (formData.enableLike) return 'like';
     return 'recast';
   };
 
+  const handleAddKeyword = () => {
+    const trimmed = keywordInput.trim();
+    if (trimmed && !keywords.includes(trimmed)) {
+      setKeywords([...keywords, trimmed]);
+      setKeywordInput('');
+    }
+  };
+
+  const handleRemoveKeyword = (keyword: string) => {
+    setKeywords(keywords.filter(k => k !== keyword));
+  };
+
+  const handleAddAccount = (username?: string) => {
+    const value = username || accountInput.trim().replace('@', '');
+    const trimmed = value.trim();
+    if (trimmed && !accounts.includes(trimmed)) {
+      setAccounts([...accounts, trimmed]);
+      setAccountInput('');
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleRemoveAccount = (account: string) => {
+    setAccounts(accounts.filter(a => a !== account));
+  };
+
+  const handleKeywordKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      handleAddKeyword();
+    }
+  };
+
+  const handleAccountKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddAccount();
+    }
+  };
+
+  const handleToggleActive = async (checked: boolean) => {
+    setFormData(prev => ({ ...prev, isActive: checked }));
+    
+    // Auto-save when toggle changes
+    if (agent && user) {
+      setIsSaving(true);
+      const agentData = {
+        user_id: user.id,
+        name: formData.name,
+        keywords,
+        accounts,
+        action_type: getActionType(),
+        is_active: checked,
+      };
+
+      const { error } = await supabase
+        .from('agents')
+        .update(agentData)
+        .eq('id', agent.id);
+
+      if (error) {
+        toast({
+          title: 'Error',
+          description: 'Failed to update agent status',
+          variant: 'destructive',
+        });
+        // Revert on error
+        setFormData(prev => ({ ...prev, isActive: !checked }));
+      } else {
+        setAgent({ ...agent, is_active: checked });
+        toast({
+          title: checked ? 'Agent Activated' : 'Agent Paused',
+          description: `Agent is now ${checked ? 'active' : 'paused'}`,
+        });
+      }
+      setIsSaving(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!user) return;
 
-    setIsLoading(true);
-
-    const keywords = formData.keywords
-      .split(',')
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
-
-    const accounts = formData.accounts
-      .split(',')
-      .map(a => a.trim().replace('@', ''))
-      .filter(a => a.length > 0);
+    setIsSaving(true);
 
     const agentData = {
       user_id: user.id,
@@ -132,7 +315,7 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
       });
     }
 
-    setIsLoading(false);
+    setIsSaving(false);
   };
 
   const handleRun = async () => {
@@ -154,20 +337,18 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
       return;
     }
 
+    if (keywords.length === 0 && accounts.length === 0) {
+      toast({
+        title: 'Add filters',
+        description: 'Add at least one keyword or account to monitor',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsRunning(true);
 
     try {
-      // Fetch feed with filters
-      const keywords = formData.keywords
-        .split(',')
-        .map(k => k.trim())
-        .filter(k => k.length > 0);
-
-      const accounts = formData.accounts
-        .split(',')
-        .map(a => a.trim().replace('@', ''))
-        .filter(a => a.length > 0);
-
       const { data: feedData, error: feedError } = await supabase.functions.invoke('farcaster-actions', {
         body: {
           action: 'fetch_feed',
@@ -194,7 +375,7 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
       const results: any[] = [];
       const actionType = getActionType();
 
-      for (const cast of casts.slice(0, 5)) { // Limit to 5 actions
+      for (const cast of casts.slice(0, 5)) {
         if (actionType === 'like' || actionType === 'both') {
           const { data, error } = await supabase.functions.invoke('farcaster-actions', {
             body: {
@@ -215,7 +396,6 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
 
           results.push(logResult);
 
-          // Save to action_logs
           if (agent && user) {
             await supabase.from('action_logs').insert({
               agent_id: agent.id,
@@ -245,7 +425,6 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
 
           results.push(logResult);
 
-          // Save to action_logs
           if (agent && user) {
             await supabase.from('action_logs').insert({
               agent_id: agent.id,
@@ -282,23 +461,24 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
     >
       <Card className="glass border-border/50 w-full overflow-hidden">
         <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                <div className="min-w-0">
-                  <CardTitle className="text-base sm:text-lg">Agent Configuration</CardTitle>
-                  <CardDescription className="text-xs sm:text-sm">Define rules for automated actions</CardDescription>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Switch
-                  checked={formData.isActive}
-                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
-                />
-                <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
-                  {formData.isActive ? 'Active' : 'Paused'}
-                </span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="min-w-0">
+                <CardTitle className="text-base sm:text-lg">Agent Configuration</CardTitle>
+                <CardDescription className="text-xs sm:text-sm">Define rules for automated actions</CardDescription>
               </div>
             </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <Switch
+                checked={formData.isActive}
+                onCheckedChange={handleToggleActive}
+                disabled={isSaving || !agent}
+              />
+              <span className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+                {formData.isActive ? 'Active' : 'Paused'}
+              </span>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-2">
@@ -313,28 +493,106 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="keywords">Keywords (comma-separated)</Label>
-            <Textarea
-              id="keywords"
-              value={formData.keywords}
-              onChange={(e) => setFormData(prev => ({ ...prev, keywords: e.target.value }))}
-              placeholder="base, onchain, crypto, web3"
-              className="bg-secondary/50 min-h-[80px]"
-            />
+            <Label htmlFor="keywords">Keywords</Label>
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <Input
+                  id="keywords"
+                  value={keywordInput}
+                  onChange={(e) => setKeywordInput(e.target.value)}
+                  onKeyDown={handleKeywordKeyPress}
+                  placeholder="Type keyword and press Enter or comma"
+                  className="bg-secondary/50 flex-1"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddKeyword}
+                  disabled={!keywordInput.trim()}
+                  variant="outline"
+                  size="sm"
+                >
+                  Add
+                </Button>
+              </div>
+              {keywords.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-secondary/30 border border-border/30 min-h-[40px]">
+                  <AnimatePresence>
+                    {keywords.map((keyword) => (
+                      <Chip
+                        key={keyword}
+                        label={keyword}
+                        onRemove={() => handleRemoveKeyword(keyword)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Agent will match casts containing these keywords
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="accounts">Accounts to Monitor (comma-separated)</Label>
-            <Input
-              id="accounts"
-              value={formData.accounts}
-              onChange={(e) => setFormData(prev => ({ ...prev, accounts: e.target.value }))}
-              placeholder="@vitalik, @jessepollak, @dwr"
-              className="bg-secondary/50"
-            />
+            <Label htmlFor="accounts">Accounts to Monitor</Label>
+            <div className="space-y-2 relative">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    ref={accountInputRef}
+                    id="accounts"
+                    value={accountInput}
+                    onChange={(e) => setAccountInput(e.target.value)}
+                    onKeyDown={handleAccountKeyPress}
+                    onFocus={() => accountInput.length >= 2 && setShowSuggestions(true)}
+                    placeholder="@username or type to search"
+                    className="bg-secondary/50 flex-1"
+                  />
+                  {isSearchingUsernames && (
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-pulse" />
+                  )}
+                  {showSuggestions && usernameSuggestions.length > 0 && (
+                    <div
+                      ref={suggestionsRef}
+                      className="absolute z-50 w-full mt-1 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
+                    >
+                      {usernameSuggestions.map((username) => (
+                        <button
+                          key={username}
+                          type="button"
+                          onClick={() => handleAddAccount(username)}
+                          className="w-full px-3 py-2 text-left hover:bg-secondary/50 transition-colors text-sm"
+                        >
+                          @{username}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  type="button"
+                  onClick={() => handleAddAccount()}
+                  disabled={!accountInput.trim()}
+                  variant="outline"
+                  size="sm"
+                >
+                  Add
+                </Button>
+              </div>
+              {accounts.length > 0 && (
+                <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-secondary/30 border border-border/30 min-h-[40px]">
+                  <AnimatePresence>
+                    {accounts.map((account) => (
+                      <Chip
+                        key={account}
+                        label={`@${account}`}
+                        onRemove={() => handleRemoveAccount(account)}
+                      />
+                    ))}
+                  </AnimatePresence>
+                </div>
+              )}
+            </div>
             <p className="text-xs text-muted-foreground">
               Leave empty to search all trending casts
             </p>
@@ -378,11 +636,11 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4">
             <Button
               onClick={handleSave}
-              disabled={isLoading}
+              disabled={isSaving || isLoading}
               variant="outline"
               className="flex-1 text-xs sm:text-sm"
             >
-              {isLoading ? (
+              {isSaving ? (
                 <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin sm:mr-2" />
               ) : (
                 <Settings className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
@@ -392,7 +650,7 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
 
             <Button
               onClick={handleRun}
-              disabled={isRunning || !farcaster.isConnected}
+              disabled={isRunning || !farcaster.isConnected || !agent}
               className="flex-1 bg-gradient-primary hover:opacity-90 text-xs sm:text-sm"
             >
               {isRunning ? (

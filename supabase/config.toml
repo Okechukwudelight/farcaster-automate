@@ -2,3 +2,6 @@ project_id = "cypyvctjnuigziuassxe"
 
 [functions.neynar-config]
 verify_jwt = false
+
+[functions.farcaster-actions]
+verify_jwt = false
