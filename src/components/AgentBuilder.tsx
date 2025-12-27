@@ -548,8 +548,9 @@ export function AgentBuilder({ onAgentRun }: AgentBuilderProps) {
 
             <Button
               onClick={handleRun}
-              disabled={isRunning || !farcaster.isConnected || !agent}
+              disabled={isRunning || !farcaster.isConnected}
               className="flex-1 bg-gradient-primary hover:opacity-90 text-xs sm:text-sm"
+              title={!farcaster.isConnected ? 'Connect Farcaster first' : !farcaster.user?.signerUuid ? 'Signer required (paid Neynar plan)' : ''}
             >
               {isRunning ? (
                 <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin sm:mr-2" />
