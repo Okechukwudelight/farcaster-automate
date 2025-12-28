@@ -1,10 +1,13 @@
-import { LogOut } from 'lucide-react';
+import { LogOut, Bot, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 
 export function Header() {
   const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <motion.header
@@ -21,7 +24,25 @@ export function Header() {
         </div>
 
         {user && (
-          <div className="flex items-center gap-2 sm:gap-4 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            <Button
+              variant={location.pathname === '/' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => navigate('/')}
+              className="text-xs sm:text-sm"
+            >
+              <Bot className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Farcaster</span>
+            </Button>
+            <Button
+              variant={location.pathname === '/remittance' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => navigate('/remittance')}
+              className="text-xs sm:text-sm"
+            >
+              <Send className="h-3 w-3 sm:h-4 sm:w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Remittance</span>
+            </Button>
             <Button
               variant="ghost"
               size="sm"
