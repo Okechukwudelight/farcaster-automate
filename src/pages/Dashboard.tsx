@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Header } from '@/components/Header';
+import { ConnectionPanel } from '@/components/ConnectionPanel';
 import { AgentBuilder } from '@/components/AgentBuilder';
 import { ActionLogs } from '@/components/ActionLogs';
 import { motion } from 'framer-motion';
-import { Badge } from '@/components/ui/badge';
-import { Eye, Sparkles } from 'lucide-react';
 
 export default function Dashboard() {
   const [newActions, setNewActions] = useState<any[]>([]);
@@ -34,28 +33,17 @@ export default function Dashboard() {
           animate={{ opacity: 1, y: 0 }}
           className="mb-4 sm:mb-8"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
-            <h1 className="text-2xl sm:text-3xl font-bold">
-              <span className="text-gradient flex items-center gap-2">
-                <Sparkles className="h-6 w-6 sm:h-8 sm:w-8" />
-                AI Agent Preview
-              </span>
-            </h1>
-            <div className="flex gap-2">
-              <Badge className="bg-primary/20 text-primary border-primary/30">Phase 1</Badge>
-              <Badge variant="outline" className="border-amber-500/50 text-amber-400 bg-amber-500/10 gap-1">
-                <Eye className="h-3 w-3" />
-                Read-Only
-              </Badge>
-            </div>
-          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">
+            <span className="text-gradient">Agent Dashboard</span>
+          </h1>
           <p className="text-sm sm:text-base text-muted-foreground">
-            Analyze any Farcaster user and generate AI-powered agent recommendations
+            Create and manage your Farcaster automation agent
           </p>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
           <div className="space-y-4 sm:space-y-6">
+            <ConnectionPanel />
             <AgentBuilder onAgentRun={handleAgentRun} />
           </div>
           <div>

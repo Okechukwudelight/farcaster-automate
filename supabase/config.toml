@@ -5,6 +5,3 @@ verify_jwt = false
 
 [functions.farcaster-actions]
 verify_jwt = false
-
-[functions.agent-analysis]
-verify_jwt = false
