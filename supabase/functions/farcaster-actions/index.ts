@@ -9,13 +9,14 @@ const NEYNAR_API_KEY = Deno.env.get('NEYNAR_API_KEY');
 const NEYNAR_BASE_URL = 'https://api.neynar.com/v2';
 
 interface FarcasterActionRequest {
-  action: 'like' | 'recast' | 'fetch_feed' | 'search_usernames';
+  action: 'like' | 'recast' | 'fetch_feed' | 'search_usernames' | 'fetch_user_profile' | 'fetch_user_casts';
   signerUuid?: string;
   castHash?: string;
   keywords?: string[];
   accounts?: string[];
   limit?: number;
   query?: string;
+  username?: string;
 }
 
 async function likeCast(signerUuid: string, castHash: string): Promise<{ success: boolean; error?: string }> {
@@ -101,6 +102,90 @@ async function searchUsernames(query: string): Promise<{ usernames: string[] }> 
     return { usernames };
   } catch (error) {
     console.error('Error searching usernames:', error);
+    throw error;
+  }
+}
+
+async function fetchUserProfile(username: string): Promise<any> {
+  try {
+    console.log('Fetching user profile for:', username);
+    
+    // Use the user/by_username endpoint (free tier)
+    const response = await fetch(`${NEYNAR_BASE_URL}/farcaster/user/by_username?username=${encodeURIComponent(username)}`, {
+      headers: {
+        'api_key': NEYNAR_API_KEY!,
+      },
+    });
+
+    const data = await response.json();
+    console.log('User profile response status:', response.status);
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch user profile');
+    }
+
+    const user = data.user;
+    return {
+      fid: user.fid,
+      username: user.username,
+      displayName: user.display_name,
+      pfpUrl: user.pfp_url,
+      bio: user.profile?.bio?.text || '',
+      followerCount: user.follower_count,
+      followingCount: user.following_count,
+      verifiedAddresses: user.verified_addresses?.eth_addresses || [],
+    };
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    throw error;
+  }
+}
+
+async function fetchUserCasts(username: string, limit: number = 20): Promise<any> {
+  try {
+    console.log('Fetching casts for user:', username);
+    
+    // First get the user's FID
+    const profileResponse = await fetch(`${NEYNAR_BASE_URL}/farcaster/user/by_username?username=${encodeURIComponent(username)}`, {
+      headers: {
+        'api_key': NEYNAR_API_KEY!,
+      },
+    });
+
+    const profileData = await profileResponse.json();
+    if (!profileResponse.ok) {
+      throw new Error(profileData.message || 'Failed to fetch user');
+    }
+
+    const fid = profileData.user.fid;
+    
+    // Fetch user's casts using the feed endpoint
+    const response = await fetch(`${NEYNAR_BASE_URL}/farcaster/feed/user/${fid}/casts?limit=${limit}`, {
+      headers: {
+        'api_key': NEYNAR_API_KEY!,
+      },
+    });
+
+    const data = await response.json();
+    console.log('User casts response count:', data.casts?.length);
+
+    if (!response.ok) {
+      throw new Error(data.message || 'Failed to fetch user casts');
+    }
+
+    return {
+      casts: (data.casts || []).map((cast: any) => ({
+        hash: cast.hash,
+        text: cast.text,
+        timestamp: cast.timestamp,
+        likes: cast.reactions?.likes_count || 0,
+        recasts: cast.reactions?.recasts_count || 0,
+        replies: cast.replies?.count || 0,
+        embeds: cast.embeds || [],
+      })),
+    };
+  } catch (error) {
+    console.error('Error fetching user casts:', error);
     throw error;
   }
 }
@@ -206,6 +291,20 @@ serve(async (req) => {
           throw new Error('query is required for search_usernames action');
         }
         result = await searchUsernames(body.query);
+        break;
+
+      case 'fetch_user_profile':
+        if (!body.username) {
+          throw new Error('username is required for fetch_user_profile action');
+        }
+        result = await fetchUserProfile(body.username);
+        break;
+
+      case 'fetch_user_casts':
+        if (!body.username) {
+          throw new Error('username is required for fetch_user_casts action');
+        }
+        result = await fetchUserCasts(body.username, body.limit || 20);
         break;
 
       default:
