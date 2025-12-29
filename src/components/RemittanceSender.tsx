@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Send, Wallet, AlertCircle, Loader2 } from 'lucide-react';
+import { Send, AlertCircle, Loader2, CreditCard, ExternalLink } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 // Stablecoin contract addresses on Base mainnet
@@ -30,28 +30,30 @@ const STABLECOINS: Record<string, { address: string; decimals: number; name: str
   },
 };
 
-// ERC20 Transfer ABI
-const ERC20_TRANSFER_ABI = [
-  {
-    name: 'transfer',
-    type: 'function',
-    inputs: [
-      { name: 'recipient', type: 'address' },
-      { name: 'amount', type: 'uint256' },
-    ],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-];
-
 export function RemittanceSender() {
   const { user } = useAuth();
-  const { address, isConnected, isOnBase, switchToBase, connect } = useWallet();
+  const { address, isConnected, isOnBase, switchToBase } = useWallet();
   const [recipient, setRecipient] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USDC');
   const [isSending, setIsSending] = useState(false);
+  const [showOnramp, setShowOnramp] = useState(false);
 
   const isValidAddress = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
+
+  // Coinbase Onramp URL
+  const getOnrampUrl = () => {
+    const baseUrl = 'https://pay.coinbase.com/buy/select-asset';
+    const params = new URLSearchParams({
+      appId: 'base-remittance',
+      destinationWallets: JSON.stringify([{
+        address: address || '',
+        blockchains: ['base'],
+        assets: ['USDC', 'DAI'],
+      }]),
+    });
+    return `${baseUrl}?${params.toString()}`;
+  };
 
   const handleSend = async () => {
     if (!user || !address) {
@@ -167,6 +169,33 @@ export function RemittanceSender() {
     return selector + paddedAddress + paddedAmount;
   };
 
+  if (!isConnected) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <Card className="glass border-border/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-primary" />
+              Send Remittance
+            </CardTitle>
+            <CardDescription>
+              Connect your wallet from the Dashboard to send remittances
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground text-center py-6">
+              Please connect your wallet in the Dashboard first to use remittance features.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -184,20 +213,7 @@ export function RemittanceSender() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {!isConnected ? (
-            <div className="text-center py-6">
-              <Wallet className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground mb-4">Connect your wallet to send remittances</p>
-              <div className="flex gap-2 justify-center">
-                <Button onClick={() => connect('metamask')} variant="outline">
-                  MetaMask
-                </Button>
-                <Button onClick={() => connect('coinbase')} variant="outline">
-                  Coinbase
-                </Button>
-              </div>
-            </div>
-          ) : !isOnBase ? (
+          {!isOnBase ? (
             <div className="text-center py-6">
               <AlertCircle className="h-12 w-12 mx-auto text-warning mb-4" />
               <p className="text-muted-foreground mb-4">Please switch to Base network</p>
@@ -207,6 +223,27 @@ export function RemittanceSender() {
             </div>
           ) : (
             <>
+              {/* Fiat On-Ramp Section */}
+              <div className="border border-border/50 rounded-lg p-4 bg-muted/20">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium">Need stablecoins?</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open(getOnrampUrl(), '_blank')}
+                  >
+                    <ExternalLink className="h-3 w-3 mr-1" />
+                    Buy with Card
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Purchase USDC or DAI directly with your credit/debit card via Coinbase
+                </p>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="recipient">Recipient Address</Label>
                 <Input
