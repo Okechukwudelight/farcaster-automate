@@ -130,7 +130,8 @@ export function ConnectionPanel() {
                       className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1"
                     />
                   )}
-                  <span className="hidden sm:inline">MetaMask</span>
+                  <span className="hidden sm:inline">{wallet.isMobile ? 'Mobile Wallet' : 'MetaMask'}</span>
+                  <span className="sm:hidden">MM</span>
                 </Button>
                 <Button
                   size="sm"
@@ -147,6 +148,7 @@ export function ConnectionPanel() {
                     </svg>
                   )}
                   <span className="hidden sm:inline">Coinbase</span>
+                  <span className="sm:hidden">CB</span>
                 </Button>
               </div>
             )}
