@@ -246,59 +246,62 @@ function useProvideWallet(): WalletContextValue {
 
       setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
-      // Prefer injected provider (wallet browser / extension)
-      if (isInWalletBrowser() || window.ethereum) {
-        const provider = getProvider(type) || window.ethereum;
+      // Check if we have any provider at all
+      const provider = getProvider(type) || window.ethereum;
 
-        if (provider) {
-          try {
-            const accounts = await provider.request({ method: "eth_requestAccounts" });
-            const chainIdHex = await provider.request({ method: "eth_chainId" });
-
-            const address = accounts?.[0] ?? null;
-            const chainId = chainIdHex ? parseInt(chainIdHex, 16) : null;
-
-            if (!address) throw new Error("No account selected");
-
-            localStorage.setItem("lastWalletType", type);
-            localStorage.setItem("lastWalletAddress", address);
-
-            setState({
-              address,
-              isConnecting: false,
-              isConnected: true,
-              chainId,
-              error: null,
-              walletType: type,
-            });
-
-            if (authUser) await saveWalletToDatabase(authUser.id, address);
-
-            setupEventListeners(provider, type);
-            return;
-          } catch (error: any) {
-            setState((prev) => ({
-              ...prev,
-              isConnecting: false,
-              error: error?.message || "Failed to connect wallet",
-            }));
+      if (!provider) {
+        // No extension available - on mobile, deep link; on desktop, show error
+        if (isMobile()) {
+          const mobileUrl = getMobileWalletUrl(type);
+          if (mobileUrl) {
+            setState((prev) => ({ ...prev, isConnecting: false }));
+            window.location.href = mobileUrl;
             return;
           }
         }
+
+        const walletName = type === "coinbase" ? "Coinbase Wallet" : "MetaMask";
+        setState((prev) => ({
+          ...prev,
+          isConnecting: false,
+          error: `${walletName} not detected. Please install the extension or use WalletConnect.`,
+        }));
+        return;
       }
 
-      // Mobile without injected provider -> deep link
-      if (isMobile()) {
-        const mobileUrl = getMobileWalletUrl(type);
-        if (mobileUrl) {
-          setState((prev) => ({ ...prev, isConnecting: false }));
-          window.location.href = mobileUrl;
-          return;
-        }
-      }
+      // Provider exists, try to connect
+      try {
+        const accounts = await provider.request({ method: "eth_requestAccounts" });
+        const chainIdHex = await provider.request({ method: "eth_chainId" });
 
-      const walletName = type === "coinbase" ? "Coinbase Wallet" : "MetaMask";
-      setState((prev) => ({ ...prev, isConnecting: false, error: `Please install ${walletName}` }));
+        const address = accounts?.[0] ?? null;
+        const chainId = chainIdHex ? parseInt(chainIdHex, 16) : null;
+
+        if (!address) throw new Error("No account selected");
+
+        localStorage.setItem("lastWalletType", type);
+        localStorage.setItem("lastWalletAddress", address);
+
+        setState({
+          address,
+          isConnecting: false,
+          isConnected: true,
+          chainId,
+          error: null,
+          walletType: type,
+        });
+
+        if (authUser) await saveWalletToDatabase(authUser.id, address);
+
+        setupEventListeners(provider, type);
+      } catch (error: any) {
+        console.error("Wallet connect error:", error);
+        setState((prev) => ({
+          ...prev,
+          isConnecting: false,
+          error: error?.message || "Failed to connect wallet",
+        }));
+      }
     },
     [authUser, connectWalletConnect, saveWalletToDatabase, setupEventListeners],
   );
