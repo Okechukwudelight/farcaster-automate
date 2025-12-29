@@ -25,16 +25,38 @@ const isMobile = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 };
 
-// Deep link URLs for mobile wallets
+// Detect if on Android
+const isAndroid = () => {
+  return /Android/i.test(navigator.userAgent);
+};
+
+// Detect if on iOS
+const isIOS = () => {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+};
+
+// Deep link URLs for mobile wallets - use native schemes that open apps directly
 const getMobileWalletUrl = (type: 'metamask' | 'coinbase') => {
   const currentUrl = window.location.href;
+  const strippedUrl = currentUrl.replace(/^https?:\/\//, '');
   
   if (type === 'metamask') {
-    return `https://metamask.app.link/dapp/${currentUrl.replace(/^https?:\/\//, '')}`;
+    // Use metamask:// scheme which opens the app directly if installed
+    if (isAndroid()) {
+      // Android: Use intent scheme for better app detection
+      return `intent://dapp/${strippedUrl}#Intent;scheme=metamask;package=io.metamask;end`;
+    }
+    // iOS and fallback: Use metamask deep link
+    return `metamask://dapp/${strippedUrl}`;
   }
   
   if (type === 'coinbase') {
-    return `https://go.cb-w.com/dapp?cb_url=${encodeURIComponent(currentUrl)}`;
+    // Use cbwallet:// scheme which opens Coinbase Wallet directly
+    if (isAndroid()) {
+      return `intent://dapp?url=${encodeURIComponent(currentUrl)}#Intent;scheme=cbwallet;package=org.toshi;end`;
+    }
+    // iOS: Use cbwallet scheme
+    return `cbwallet://dapp?url=${encodeURIComponent(currentUrl)}`;
   }
   
   return null;
@@ -43,13 +65,11 @@ const getMobileWalletUrl = (type: 'metamask' | 'coinbase') => {
 // Check if we're inside a mobile wallet browser
 const isInWalletBrowser = () => {
   const ua = navigator.userAgent.toLowerCase();
-  return (
-    ua.includes('metamask') ||
-    ua.includes('coinbase') ||
-    ua.includes('trust') ||
-    ua.includes('rainbow') ||
-    (window.ethereum && isMobile())
-  );
+  // Check for wallet-specific user agents or injected providers
+  const hasWalletUA = ua.includes('metamask') || ua.includes('coinbase') || ua.includes('trust') || ua.includes('rainbow');
+  const hasInjectedProvider = typeof window !== 'undefined' && window.ethereum;
+  
+  return hasWalletUA || (isMobile() && hasInjectedProvider);
 };
 
 export function useWallet() {
@@ -231,28 +251,22 @@ export function useWallet() {
       return connectWalletConnect();
     }
 
-    // Check if on mobile and not in wallet browser
-    if (isMobile() && !isInWalletBrowser()) {
-      const mobileUrl = getMobileWalletUrl(type);
-      if (mobileUrl) {
-        window.location.href = mobileUrl;
-        return;
-      }
-    }
+    setState(prev => ({ ...prev, isConnecting: true, error: null }));
 
-    const provider = getProvider(type);
-    
-    // If on mobile and no specific provider, try generic ethereum
-    if (!provider && isMobile()) {
-      if (window.ethereum) {
+    // First, check if we're in a wallet browser or have an injected provider
+    if (isInWalletBrowser() || window.ethereum) {
+      const provider = getProvider(type) || window.ethereum;
+      
+      if (provider) {
         try {
-          setState(prev => ({ ...prev, isConnecting: true, error: null }));
-          
-          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-          const chainIdHex = await window.ethereum.request({ method: 'eth_chainId' });
+          const accounts = await provider.request({ method: 'eth_requestAccounts' });
+          const chainIdHex = await provider.request({ method: 'eth_chainId' });
 
           const address = accounts[0];
           const chainId = parseInt(chainIdHex, 16);
+
+          // Save wallet type to localStorage for reconnection
+          localStorage.setItem('lastWalletType', type);
 
           setState({
             address,
@@ -267,9 +281,10 @@ export function useWallet() {
             await saveWalletToDatabase(authUser.id, address);
           }
 
-          setupEventListeners(window.ethereum, type);
+          setupEventListeners(provider, type);
           return;
         } catch (error: any) {
+          // If user rejected or error, don't redirect to app store
           setState(prev => ({
             ...prev,
             isConnecting: false,
@@ -278,54 +293,25 @@ export function useWallet() {
           return;
         }
       }
-      
+    }
+
+    // Only redirect to mobile app if we're on mobile and don't have a provider
+    if (isMobile()) {
       const mobileUrl = getMobileWalletUrl(type);
       if (mobileUrl) {
+        setState(prev => ({ ...prev, isConnecting: false }));
         window.location.href = mobileUrl;
         return;
       }
     }
-    
-    if (!provider) {
-      const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
-      setState(prev => ({
-        ...prev,
-        error: `Please install ${walletName}`,
-      }));
-      return;
-    }
 
-    setState(prev => ({ ...prev, isConnecting: true, error: null }));
-
-    try {
-      const accounts = await provider.request({ method: 'eth_requestAccounts' });
-      const chainIdHex = await provider.request({ method: 'eth_chainId' });
-
-      const address = accounts[0];
-      const chainId = parseInt(chainIdHex, 16);
-
-      setState({
-        address,
-        isConnecting: false,
-        isConnected: true,
-        chainId,
-        error: null,
-        walletType: type,
-      });
-
-      if (authUser) {
-        await saveWalletToDatabase(authUser.id, address);
-      }
-
-      setupEventListeners(provider, type);
-
-    } catch (error: any) {
-      setState(prev => ({
-        ...prev,
-        isConnecting: false,
-        error: error.message || 'Failed to connect wallet',
-      }));
-    }
+    // Desktop without extension
+    const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
+    setState(prev => ({
+      ...prev,
+      isConnecting: false,
+      error: `Please install ${walletName}`,
+    }));
   }, [authUser, connectWalletConnect]);
 
   const disconnect = useCallback(async () => {
@@ -373,10 +359,19 @@ export function useWallet() {
       if (error) throw error;
 
       if (data?.wallet_address) {
+        // Get the last used wallet type from localStorage
+        const savedWalletType = localStorage.getItem('lastWalletType') as WalletType | null;
         let provider = window.ethereum;
-        let walletType: WalletType = 'metamask';
+        let walletType: WalletType = savedWalletType || 'metamask';
         
-        if (!isMobile() || !isInWalletBrowser()) {
+        // Try to get the appropriate provider
+        if (savedWalletType && savedWalletType !== 'walletconnect') {
+          const specificProvider = getProvider(savedWalletType);
+          if (specificProvider) {
+            provider = specificProvider;
+          }
+        } else if (!provider) {
+          // Fallback: try metamask then coinbase
           provider = getProvider('metamask');
           if (!provider) {
             provider = getProvider('coinbase');
@@ -386,27 +381,39 @@ export function useWallet() {
 
         if (provider) {
           try {
+            // Use eth_accounts (doesn't prompt) to check if already connected
             const accounts = await provider.request({ method: 'eth_accounts' });
-            const chainIdHex = await provider.request({ method: 'eth_chainId' });
-
-            if (accounts.length > 0 && accounts[0].toLowerCase() === data.wallet_address.toLowerCase()) {
-              setState({
-                address: accounts[0],
-                isConnecting: false,
-                isConnected: true,
-                chainId: parseInt(chainIdHex, 16),
-                error: null,
-                walletType,
-              });
-            } else {
-              setState(prev => ({
-                ...prev,
-                address: null,
-                isConnected: false,
-              }));
+            
+            if (accounts.length > 0) {
+              const chainIdHex = await provider.request({ method: 'eth_chainId' });
+              const connectedAddress = accounts[0].toLowerCase();
+              const savedAddress = data.wallet_address.toLowerCase();
+              
+              // Check if any connected account matches the saved address
+              const matchingAccount = accounts.find((acc: string) => acc.toLowerCase() === savedAddress);
+              
+              if (matchingAccount) {
+                setState({
+                  address: matchingAccount,
+                  isConnecting: false,
+                  isConnected: true,
+                  chainId: parseInt(chainIdHex, 16),
+                  error: null,
+                  walletType,
+                });
+                return;
+              }
             }
+            
+            // No matching account found, but we have a saved address
+            // Set the address from DB so UI shows it, but mark as not connected
+            setState(prev => ({
+              ...prev,
+              address: null,
+              isConnected: false,
+            }));
           } catch (error) {
-            console.log('Wallet not available:', error);
+            console.log('Wallet auto-reconnect failed:', error);
           }
         }
       }
