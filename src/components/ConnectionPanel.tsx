@@ -12,20 +12,20 @@ export function ConnectionPanel() {
   const farcaster = useFarcaster();
   const { user: authUser } = useAuth();
 
-  // Reload connections when auth user changes or component mounts
+  // Reload connections when component mounts (wallet can restore without auth; Farcaster needs auth)
   useEffect(() => {
+    wallet.loadWallet();
     if (authUser) {
       farcaster.loadConnection();
-      wallet.loadWallet();
     }
   }, [authUser, farcaster.loadConnection, wallet.loadWallet]);
 
-  // Also reload when window regains focus (in case user signed in in another tab/window)
+  // Also reload when window regains focus
   useEffect(() => {
     const handleFocus = () => {
+      wallet.loadWallet();
       if (authUser) {
         farcaster.loadConnection();
-        wallet.loadWallet();
       }
     };
     window.addEventListener('focus', handleFocus);
@@ -49,15 +49,13 @@ export function ConnectionPanel() {
   // Listen for wallet connection events
   useEffect(() => {
     const handleWalletConnected = () => {
-      if (authUser) {
-        setTimeout(() => {
-          wallet.loadWallet();
-        }, 500);
-      }
+      setTimeout(() => {
+        wallet.loadWallet();
+      }, 500);
     };
     window.addEventListener('wallet-connected', handleWalletConnected);
     return () => window.removeEventListener('wallet-connected', handleWalletConnected);
-  }, [authUser, wallet.loadWallet]);
+  }, [wallet.loadWallet]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
