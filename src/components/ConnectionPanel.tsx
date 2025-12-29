@@ -119,36 +119,59 @@ export function ConnectionPanel() {
                   variant="outline"
                   onClick={() => wallet.connect('metamask')}
                   disabled={wallet.isConnecting}
-                  className="text-foreground text-xs"
+                  className="text-foreground text-xs px-2 sm:px-3"
+                  title="MetaMask"
                 >
                   {wallet.isConnecting ? (
-                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <img 
-                      src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
-                      alt="MetaMask"
-                      className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1"
-                    />
+                    <>
+                      <img 
+                        src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
+                        alt="MetaMask"
+                        className="w-4 h-4 sm:mr-1"
+                      />
+                      <span className="hidden sm:inline">MetaMask</span>
+                    </>
                   )}
-                  <span className="hidden sm:inline">{wallet.isMobile ? 'Mobile Wallet' : 'MetaMask'}</span>
-                  <span className="sm:hidden">MM</span>
                 </Button>
                 <Button
                   size="sm"
                   onClick={() => wallet.connect('coinbase')}
                   disabled={wallet.isConnecting}
-                  className="bg-[#0052FF] hover:bg-[#0052FF]/90 text-white text-xs"
+                  className="bg-[#0052FF] hover:bg-[#0052FF]/90 text-white text-xs px-2 sm:px-3"
+                  title="Coinbase Wallet"
                 >
                   {wallet.isConnecting ? (
-                    <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <svg viewBox="0 0 48 48" className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-1" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="24" cy="24" r="24" fill="#0052FF"/>
-                      <path d="M24 10C16.268 10 10 16.268 10 24s6.268 14 14 14 14-6.268 14-14S31.732 10 24 10zm-4.2 17.5a3.5 3.5 0 1 1 0-7h8.4a3.5 3.5 0 1 1 0 7h-8.4z" fill="#fff"/>
-                    </svg>
+                    <>
+                      <svg viewBox="0 0 48 48" className="w-4 h-4 sm:mr-1" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="24" cy="24" r="24" fill="#0052FF"/>
+                        <path d="M24 10C16.268 10 10 16.268 10 24s6.268 14 14 14 14-6.268 14-14S31.732 10 24 10zm-4.2 17.5a3.5 3.5 0 1 1 0-7h8.4a3.5 3.5 0 1 1 0 7h-8.4z" fill="#fff"/>
+                      </svg>
+                      <span className="hidden sm:inline">Coinbase</span>
+                    </>
                   )}
-                  <span className="hidden sm:inline">Coinbase</span>
-                  <span className="sm:hidden">CB</span>
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => wallet.connect('walletconnect' as const)}
+                  disabled={wallet.isConnecting}
+                  className="text-foreground text-xs px-2 sm:px-3"
+                  title="WalletConnect"
+                >
+                  {wallet.isConnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 300 185" className="w-4 h-4 sm:mr-1" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M61.4385 36.2562C108.717 -9.41866 191.283 -9.41866 238.562 36.2562L244.1 41.5677C246.482 43.8648 246.482 47.6135 244.1 49.9106L223.91 69.3182C222.719 70.4668 220.801 70.4668 219.61 69.3182L212.093 62.0754C179.012 30.0461 120.988 30.0461 87.9071 62.0754L79.7985 69.9171C78.6073 71.0657 76.6898 71.0657 75.4986 69.9171L55.3083 50.5095C52.9267 48.2124 52.9267 44.4637 55.3083 42.1666L61.4385 36.2562ZM279.361 75.5308L297.267 92.7855C299.648 95.0825 299.648 98.8313 297.267 101.128L216.617 178.393C214.235 180.69 210.4 180.69 208.018 178.393L151.892 124.485C151.297 123.911 150.338 123.911 149.743 124.485L93.6167 178.393C91.235 180.69 87.4 180.69 85.0184 178.393L4.36817 101.128C1.98652 98.8313 1.98652 95.0825 4.36817 92.7855L22.2741 75.5308C24.6558 73.2337 28.4909 73.2337 30.8726 75.5308L86.9987 129.439C87.5936 130.013 88.5528 130.013 89.1477 129.439L145.274 75.5308C147.655 73.2337 151.49 73.2337 153.872 75.5308L210.852 129.439C211.447 130.013 212.406 130.013 213.001 129.439L269.127 75.5308C271.509 73.2337 275.344 73.2337 277.726 75.5308L279.361 75.5308Z" fill="#3B99FC"/>
+                      </svg>
+                      <span className="hidden sm:inline">WalletConnect</span>
+                    </>
+                  )}
                 </Button>
               </div>
             )}
