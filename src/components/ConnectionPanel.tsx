@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import coreWalletLogo from '@/assets/core-wallet-logo.png';
 import { Wallet, User, Check, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -125,7 +126,7 @@ export function ConnectionPanel() {
                   ) : (
                     <>
                       <img 
-                        src="https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png" 
+                        src={coreWalletLogo} 
                         alt="Core Wallet"
                         className="w-4 h-4 sm:mr-1"
                       />
