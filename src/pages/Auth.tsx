@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import coreWalletLogo from '@/assets/core-wallet-logo.png';
 import { useNavigate } from 'react-router-dom';
 import { Loader2, ArrowRight } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -260,7 +261,7 @@ export default function Auth() {
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
                     <img 
-                      src="https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png" 
+                      src={coreWalletLogo} 
                       alt="Core Wallet"
                       className="w-5 h-5 sm:w-6 sm:h-6"
                     />
