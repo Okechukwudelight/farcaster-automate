@@ -115,21 +115,21 @@ export function ConnectionPanel() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => wallet.connect('metamask')}
+                  onClick={() => wallet.connect('core')}
                   disabled={wallet.isConnecting}
                   className="text-foreground text-xs px-2 sm:px-3"
-                  title="MetaMask"
+                  title="Core Wallet"
                 >
                   {wallet.isConnecting ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
                       <img 
-                        src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
-                        alt="MetaMask"
+                        src="https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png" 
+                        alt="Core Wallet"
                         className="w-4 h-4 sm:mr-1"
                       />
-                      <span className="hidden sm:inline">MetaMask</span>
+                      <span className="hidden sm:inline">Core</span>
                     </>
                   )}
                 </Button>
