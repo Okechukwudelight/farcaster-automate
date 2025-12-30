@@ -263,7 +263,7 @@ export default function Auth() {
                     <img 
                       src={coreWalletLogo} 
                       alt="Core Wallet"
-                      className="w-5 h-5 sm:w-6 sm:h-6"
+                      className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg"
                     />
                   </div>
                   <div className="text-left min-w-0 flex-1">
