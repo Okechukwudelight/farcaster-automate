@@ -28,7 +28,7 @@ export default function Auth() {
   }, [user, navigate]);
 
   const handleWalletAuth = async (type: WalletProviderType) => {
-    const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'MetaMask';
+    const walletName = type === 'coinbase' ? 'Coinbase Wallet' : 'Core Wallet';
     const provider = getInjectedProvider(type);
 
     if (!provider) {
@@ -38,7 +38,7 @@ export default function Auth() {
         variant: 'destructive',
       });
       window.open(
-        type === 'coinbase' ? 'https://www.coinbase.com/wallet' : 'https://metamask.io/download/',
+        type === 'coinbase' ? 'https://www.coinbase.com/wallet' : 'https://core.app/',
         '_blank'
       );
       return;
@@ -253,27 +253,27 @@ export default function Auth() {
             <div className="space-y-3">
               <button
                 type="button"
-                onClick={() => handleWalletAuth('metamask')}
+                onClick={() => handleWalletAuth('core')}
                 disabled={!!walletAuthLoading}
-                className="w-full flex items-center justify-between p-3 sm:p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-orange-500/30 transition-all duration-300 group"
+                className="w-full flex items-center justify-between p-3 sm:p-4 rounded-xl bg-secondary/50 border border-border/50 hover:bg-secondary hover:border-red-500/30 transition-all duration-300 group"
               >
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-orange-500/10 flex items-center justify-center flex-shrink-0">
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-red-500/10 flex items-center justify-center flex-shrink-0">
                     <img 
-                      src="https://upload.wikimedia.org/wikipedia/commons/3/36/MetaMask_Fox.svg" 
-                      alt="MetaMask"
+                      src="https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png" 
+                      alt="Core Wallet"
                       className="w-5 h-5 sm:w-6 sm:h-6"
                     />
                   </div>
                   <div className="text-left min-w-0 flex-1">
-                    <p className="font-medium text-sm sm:text-base text-foreground truncate">Continue with MetaMask</p>
+                    <p className="font-medium text-sm sm:text-base text-foreground truncate">Continue with Core</p>
                     <p className="text-xs text-muted-foreground hidden sm:block">Sign a message to verify ownership</p>
                   </div>
                 </div>
-                {walletAuthLoading === 'metamask' ? (
+                {walletAuthLoading === 'core' ? (
                   <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground animate-spin flex-shrink-0 ml-2" />
                 ) : (
-                  <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-orange-500 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
+                  <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground group-hover:text-red-500 group-hover:translate-x-1 transition-all flex-shrink-0 ml-2" />
                 )}
               </button>
 

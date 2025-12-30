@@ -1,4 +1,4 @@
-export type WalletProviderType = "metamask" | "coinbase";
+export type WalletProviderType = "core" | "coinbase";
 
 export function getInjectedProvider(type: WalletProviderType): any | null {
   if (typeof window === "undefined") return null;
@@ -12,11 +12,15 @@ export function getInjectedProvider(type: WalletProviderType): any | null {
     if (Array.isArray(eth.providers)) return eth.providers.find((p: any) => p.isCoinbaseWallet);
   }
 
-  if (type === "metamask") {
+  if (type === "core") {
+    // Core Wallet (Avalanche) - check for Core-specific provider
+    if ((window as any).avalanche) return (window as any).avalanche;
+    if (eth.isAvalanche || eth.isCore) return eth;
     if (Array.isArray(eth.providers)) {
-      return eth.providers.find((p: any) => p.isMetaMask && !p.isCoinbaseWallet);
+      return eth.providers.find((p: any) => p.isAvalanche || p.isCore);
     }
-    if (eth.isMetaMask) return eth;
+    // Fallback to default ethereum provider
+    if (!eth.isCoinbaseWallet) return eth;
   }
 
   return eth;

@@ -3,7 +3,7 @@ import EthereumProvider from "@walletconnect/ethereum-provider";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
 
-type WalletType = "metamask" | "coinbase" | "walletconnect";
+type WalletType = "core" | "coinbase" | "walletconnect";
 
 interface WalletState {
   address: string | null;
@@ -28,22 +28,24 @@ const isMobile = () =>
 const isAndroid = () => /Android/i.test(navigator.userAgent);
 const isIOS = () => /iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-const getMobileWalletUrl = (type: "metamask" | "coinbase") => {
+const getMobileWalletUrl = (type: "core" | "coinbase") => {
   const currentUrl = window.location.href;
-  const strippedUrl = currentUrl.replace(/^https?:\/\//, "");
+  const encodedUrl = encodeURIComponent(currentUrl);
 
-  if (type === "metamask") {
+  if (type === "core") {
+    // Core Wallet (Avalanche) deep links
     if (isAndroid()) {
-      return `intent://dapp/${strippedUrl}#Intent;scheme=metamask;package=io.metamask;end`;
+      return `intent://wc?uri=${encodedUrl}#Intent;scheme=core;package=com.avaxwallet;end`;
     }
-    return `metamask://dapp/${strippedUrl}`;
+    // iOS - Core wallet uses universal links
+    return `https://core.app/browser?url=${encodedUrl}`;
   }
 
   if (type === "coinbase") {
     if (isAndroid()) {
-      return `intent://dapp?url=${encodeURIComponent(currentUrl)}#Intent;scheme=cbwallet;package=org.toshi;end`;
+      return `intent://dapp?url=${encodedUrl}#Intent;scheme=cbwallet;package=org.toshi;end`;
     }
-    return `cbwallet://dapp?url=${encodeURIComponent(currentUrl)}`;
+    return `cbwallet://dapp?url=${encodedUrl}`;
   }
 
   return null;
@@ -52,7 +54,8 @@ const getMobileWalletUrl = (type: "metamask" | "coinbase") => {
 const isInWalletBrowser = () => {
   const ua = navigator.userAgent.toLowerCase();
   const hasWalletUA =
-    ua.includes("metamask") ||
+    ua.includes("core") ||
+    ua.includes("avalanche") ||
     ua.includes("coinbase") ||
     ua.includes("trust") ||
     ua.includes("rainbow");
@@ -60,7 +63,7 @@ const isInWalletBrowser = () => {
   return hasWalletUA || (isMobile() && hasInjectedProvider);
 };
 
-const getProvider = (type: "metamask" | "coinbase") => {
+const getProvider = (type: "core" | "coinbase") => {
   if (type === "coinbase") {
     if ((window as any).coinbaseWalletExtension) return (window as any).coinbaseWalletExtension;
     if (window.ethereum?.isCoinbaseWallet) return window.ethereum;
@@ -69,20 +72,34 @@ const getProvider = (type: "metamask" | "coinbase") => {
     }
   }
 
-  if (type === "metamask") {
+  if (type === "core") {
+    // Core Wallet (Avalanche) - check for Core-specific provider
+    if ((window as any).avalanche) return (window as any).avalanche;
+    if (window.ethereum?.isAvalanche) return window.ethereum;
     if (window.ethereum?.providers) {
-      return window.ethereum.providers.find((p: any) => p.isMetaMask && !p.isCoinbaseWallet);
+      return window.ethereum.providers.find((p: any) => p.isAvalanche || p.isCore);
     }
-    if (window.ethereum?.isMetaMask) return window.ethereum;
+    // Fallback to default ethereum provider (Core injects as window.ethereum)
+    if (window.ethereum && !window.ethereum.isCoinbaseWallet) return window.ethereum;
   }
 
   return window.ethereum;
 };
 
+// Wait for provider to be available with retries (fixes desktop timing issue)
+const waitForProvider = async (type: "core" | "coinbase", maxRetries = 5): Promise<any> => {
+  for (let i = 0; i < maxRetries; i++) {
+    const provider = getProvider(type) || window.ethereum;
+    if (provider) return provider;
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return null;
+};
+
 const inferWalletTypeFromProvider = (provider: any): WalletType | null => {
   if (!provider) return null;
   if (provider.isCoinbaseWallet) return "coinbase";
-  if (provider.isMetaMask) return "metamask";
+  if (provider.isAvalanche || provider.isCore) return "core";
   return null;
 };
 
@@ -241,13 +258,13 @@ function useProvideWallet(): WalletContextValue {
   }, [authUser, saveWalletToDatabase, setupEventListeners]);
 
   const connect = useCallback(
-    async (type: WalletType = "metamask") => {
+    async (type: WalletType = "core") => {
       if (type === "walletconnect") return connectWalletConnect();
 
       setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
-      // Check if we have any provider at all
-      const provider = getProvider(type) || window.ethereum;
+      // Wait for provider with retries (fixes desktop timing issue)
+      const provider = await waitForProvider(type);
 
       if (!provider) {
         // No extension available - on mobile, deep link; on desktop, show error
@@ -260,7 +277,7 @@ function useProvideWallet(): WalletContextValue {
           }
         }
 
-        const walletName = type === "coinbase" ? "Coinbase Wallet" : "MetaMask";
+        const walletName = type === "coinbase" ? "Coinbase Wallet" : "Core Wallet";
         setState((prev) => ({
           ...prev,
           isConnecting: false,
@@ -339,8 +356,8 @@ function useProvideWallet(): WalletContextValue {
   const attemptInjectedAutoReconnect = useCallback(async () => {
     if (!window.ethereum) return false;
 
-    const savedWalletType = (localStorage.getItem("lastWalletType") as WalletType | null) ?? null;
-    const preferred = savedWalletType && savedWalletType !== "walletconnect" ? savedWalletType : "metamask";
+    const savedWalletType = localStorage.getItem("lastWalletType") as WalletType | null;
+    const preferred: "core" | "coinbase" = savedWalletType === "coinbase" ? "coinbase" : "core";
     const provider = getProvider(preferred) || window.ethereum;
 
     try {
@@ -417,7 +434,7 @@ function useProvideWallet(): WalletContextValue {
 
     if (state.walletType === "walletconnect" && wcProviderRef.current) {
       provider = wcProviderRef.current;
-    } else if (state.walletType === "metamask" || state.walletType === "coinbase") {
+    } else if (state.walletType === "core" || state.walletType === "coinbase") {
       provider = getProvider(state.walletType);
     } else {
       provider = window.ethereum;
