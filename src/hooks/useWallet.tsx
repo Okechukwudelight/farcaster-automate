@@ -63,6 +63,17 @@ const isInWalletBrowser = () => {
   return hasWalletUA || (isMobile() && hasInjectedProvider);
 };
 
+// Check if we're inside Core Wallet's in-app browser
+const isInCoreWalletBrowser = () => {
+  if (typeof window === "undefined") return false;
+  const ua = navigator.userAgent.toLowerCase();
+  // Core Wallet injects window.avalanche or sets isAvalanche/isCore on window.ethereum
+  const hasAvalancheProvider = !!(window as any).avalanche;
+  const hasCoreProvider = window.ethereum?.isAvalanche || window.ethereum?.isCore;
+  const hasCoreUA = ua.includes("core") || ua.includes("avalanche");
+  return hasAvalancheProvider || hasCoreProvider || (isMobile() && hasCoreUA && !!window.ethereum);
+};
+
 const getProvider = (type: "core" | "coinbase") => {
   if (type === "coinbase") {
     if ((window as any).coinbaseWalletExtension) return (window as any).coinbaseWalletExtension;
@@ -264,11 +275,16 @@ function useProvideWallet(): WalletContextValue {
       setState((prev) => ({ ...prev, isConnecting: true, error: null }));
 
       // Wait for provider with retries (fixes desktop timing issue)
-      const provider = await waitForProvider(type);
+      let provider = await waitForProvider(type);
+
+      // If we're inside Core Wallet's in-app browser on mobile, always use the injected provider
+      if (!provider && type === "core" && isMobile() && isInCoreWalletBrowser()) {
+        provider = window.ethereum;
+      }
 
       if (!provider) {
-        // No extension available - on mobile, deep link; on desktop, show error
-        if (isMobile()) {
+        // No extension available - on mobile (not in wallet browser), deep link; on desktop, show error
+        if (isMobile() && !isInCoreWalletBrowser()) {
           const mobileUrl = getMobileWalletUrl(type);
           if (mobileUrl) {
             setState((prev) => ({ ...prev, isConnecting: false }));
