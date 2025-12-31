@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.farcaster-actions]
 verify_jwt = false
+
+[functions.coinbase-session]
+verify_jwt = false
