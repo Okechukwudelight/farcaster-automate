@@ -41,18 +41,14 @@ export function RemittanceSender() {
 
   const isValidAddress = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
 
-  // Coinbase Onramp URL
+  // Coinbase Onramp URL - using the public widget without appId
   const getOnrampUrl = () => {
-    const baseUrl = 'https://pay.coinbase.com/buy/select-asset';
+    // Use Coinbase's public onramp that doesn't require appId registration
     const params = new URLSearchParams({
-      appId: 'base-remittance',
-      destinationWallets: JSON.stringify([{
-        address: address || '',
-        blockchains: ['base'],
-        assets: ['USDC', 'DAI'],
-      }]),
+      addresses: JSON.stringify({ [address || '']: ['base'] }),
+      assets: JSON.stringify(['USDC', 'DAI']),
     });
-    return `${baseUrl}?${params.toString()}`;
+    return `https://pay.coinbase.com/buy/select-asset?${params.toString()}`;
   };
 
   const handleSend = async () => {
@@ -111,6 +107,28 @@ export function RemittanceSender() {
       const provider = window.ethereum;
       if (!provider) throw new Error('No wallet provider found');
 
+      // Estimate gas first, then add a buffer
+      let gasLimit: string;
+      try {
+        const gasEstimate = await provider.request({
+          method: 'eth_estimateGas',
+          params: [
+            {
+              from: address,
+              to: stablecoin.address,
+              data: transferData,
+            },
+          ],
+        });
+        // Add 20% buffer to gas estimate
+        const gasWithBuffer = BigInt(gasEstimate as string) * 120n / 100n;
+        gasLimit = '0x' + gasWithBuffer.toString(16);
+      } catch (gasError) {
+        console.warn('Gas estimation failed, using default:', gasError);
+        // Default gas limit for ERC20 transfers
+        gasLimit = '0x15F90'; // 90,000 gas
+      }
+
       const txHash = await provider.request({
         method: 'eth_sendTransaction',
         params: [
@@ -118,6 +136,7 @@ export function RemittanceSender() {
             from: address,
             to: stablecoin.address,
             data: transferData,
+            gas: gasLimit,
           },
         ],
       });
