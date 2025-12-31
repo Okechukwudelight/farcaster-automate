@@ -41,12 +41,15 @@ export function RemittanceSender() {
 
   const isValidAddress = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
 
-  // Coinbase Onramp URL - using the public widget without appId
+  // Coinbase Onramp URL with project ID
   const getOnrampUrl = () => {
-    // Use Coinbase's public onramp that doesn't require appId registration
     const params = new URLSearchParams({
-      addresses: JSON.stringify({ [address || '']: ['base'] }),
-      assets: JSON.stringify(['USDC', 'DAI']),
+      appId: '3f761ef0-46d0-43ae-be88-11e6bc848798',
+      destinationWallets: JSON.stringify([{
+        address: address || '',
+        blockchains: ['base'],
+        assets: ['USDC', 'DAI'],
+      }]),
     });
     return `https://pay.coinbase.com/buy/select-asset?${params.toString()}`;
   };
