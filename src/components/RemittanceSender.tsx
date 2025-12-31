@@ -40,18 +40,38 @@ export function RemittanceSender() {
   const [showOnramp, setShowOnramp] = useState(false);
 
   const isValidAddress = (addr: string) => /^0x[a-fA-F0-9]{40}$/.test(addr);
+  const [isLoadingOnramp, setIsLoadingOnramp] = useState(false);
 
-  // Coinbase Onramp URL with project ID
-  const getOnrampUrl = () => {
-    const params = new URLSearchParams({
-      appId: '3f761ef0-46d0-43ae-be88-11e6bc848798',
-      destinationWallets: JSON.stringify([{
-        address: address || '',
-        blockchains: ['base'],
-        assets: ['USDC', 'DAI'],
-      }]),
-    });
-    return `https://pay.coinbase.com/buy/select-asset?${params.toString()}`;
+  // Open Coinbase Onramp with session token
+  const openOnramp = async () => {
+    if (!address) {
+      toast.error('Please connect your wallet first');
+      return;
+    }
+
+    setIsLoadingOnramp(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('coinbase-session', {
+        body: { address },
+      });
+
+      if (error) throw error;
+      if (!data?.sessionToken) throw new Error('Failed to get session token');
+
+      const params = new URLSearchParams({
+        appId: '3f761ef0-46d0-43ae-be88-11e6bc848798',
+        sessionToken: data.sessionToken,
+      });
+      
+      window.open(`https://pay.coinbase.com/buy/select-asset?${params.toString()}`, '_blank');
+    } catch (error: any) {
+      console.error('Onramp error:', error);
+      toast.error('Failed to open Coinbase Pay', {
+        description: error.message || 'Please try again',
+      });
+    } finally {
+      setIsLoadingOnramp(false);
+    }
   };
 
   const handleSend = async () => {
@@ -255,9 +275,14 @@ export function RemittanceSender() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => window.open(getOnrampUrl(), '_blank')}
+                    onClick={openOnramp}
+                    disabled={isLoadingOnramp}
                   >
-                    <ExternalLink className="h-3 w-3 mr-1" />
+                    {isLoadingOnramp ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <ExternalLink className="h-3 w-3 mr-1" />
+                    )}
                     Buy with Card
                   </Button>
                 </div>
